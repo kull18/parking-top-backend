@@ -18,13 +18,4 @@ router.use('/reservations', reservationRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/reviews', reviewRoutes);
 
-// Health check
-router.get('/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime()
-  });
-});
-
 export default router;

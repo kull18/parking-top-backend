@@ -7,40 +7,35 @@ import { startSubscriptionJobs, stopSubscriptionJobs } from '@/jobs/check-subscr
 
 try {
   validateConfig();
-  logger.info('✅ Configuration validated successfully');
+  logger.info('Configuration validated successfully');
 } catch (error: any) {
-  logger.error('❌ Configuration error:', error.message);
+  logger.error('Configuration error:', error.message);
   process.exit(1);
 }
 
-// Iniciar servidor
 const server = app.listen(config.app.port, () => {
-  logger.info(`🚀 Server running on port ${config.app.port}`);
-  logger.info(`📝 Environment: ${config.app.env}`);
-  logger.info(`🗄️  Database connected`);
-  logger.info(`💾 Redis connected`);
+  logger.info(`Server running on port ${config.app.port}`);
+  logger.info(`Environment: ${config.app.env}`);
+  logger.info(`Database connected`);
+  logger.info(`Redis connected`);
   
-  // Iniciar cron jobs en producción
   if (config.app.env === 'production') {
     startSubscriptionJobs();
-    logger.info('⏰ Cron jobs started');
+    logger.info('Cron jobs started');
   } else {
-    logger.info('⏰ Cron jobs disabled in development');
+    logger.info('Cron jobs disabled in development');
   }
 });
 
-// Manejo de cierre graceful
 const gracefulShutdown = async (): Promise<void> => {
   logger.info('Received shutdown signal, closing gracefully...');
   
   server.close(async () => {
     logger.info('HTTP server closed');
     
-    // Detener cron jobs
     stopSubscriptionJobs();
     logger.info('Cron jobs stopped');
     
-    // Cerrar conexiones
     await prisma.$disconnect();
     logger.info('Database disconnected');
     
@@ -50,7 +45,6 @@ const gracefulShutdown = async (): Promise<void> => {
     process.exit(0);
   });
 
-  // Forzar cierre después de 10 segundos
   setTimeout(() => {
     logger.error('Could not close connections in time, forcefully shutting down');
     process.exit(1);
@@ -60,7 +54,6 @@ const gracefulShutdown = async (): Promise<void> => {
 process.on('SIGTERM', gracefulShutdown);
 process.on('SIGINT', gracefulShutdown);
 
-// Manejo de errores no capturados
 process.on('unhandledRejection', (reason: any) => {
   logger.error('Unhandled Rejection:', reason);
 });
