@@ -1,0 +1,383 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────
+// USERS
+// ─────────────────────────────────────────
+
+model User {
+  id               String    @id @default(cuid())
+  email            String    @unique
+  passwordHash     String
+  fullName         String
+  phone            String?
+  role             String    // customer | owner | admin
+  status           String    @default("active") // active | suspended | inactive
+  profileImageUrl  String?
+  emailVerified    Boolean   @default(false)
+  phoneVerified    Boolean   @default(false)
+  lastLoginAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  // Relations
+  subscription     Subscription?
+  parkingLots      ParkingLot[]
+  reservations     Reservation[]
+  vehicles         Vehicle[]
+  payments         Payment[]
+  reviews          Review[]
+  notifications    Notification[]
+  pushTokens       PushToken[]
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────
+// VEHICLES
+// ─────────────────────────────────────────
+
+model Vehicle {
+  id           String   @id @default(cuid())
+  userId       String
+  licensePlate String
+  brand        String?
+  model        String?
+  color        String?
+  vehicleType  String   @default("car") // car | moto | suv | van | truck
+  isDefault    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  user         User          @relation(fields: [userId], references: [id])
+  reservations Reservation[]
+
+  @@unique([userId, licensePlate])
+  @@map("vehicles")
+}
+
+// ─────────────────────────────────────────
+// SUBSCRIPTION PLANS
+// ─────────────────────────────────────────
+
+model SubscriptionPlan {
+  id            String   @id @default(cuid())
+  name          String   @unique // basic | premium | enterprise
+  displayName   String
+  description   String?
+  monthlyPrice  Decimal  @db.Decimal(10, 2)
+  setupFee      Decimal  @default(0) @db.Decimal(10, 2)
+  maxParkingLots Int?    // null = unlimited
+  maxSpotsPerLot Int?    // null = unlimited
+  commissionRate Decimal @db.Decimal(5, 2)
+  features      String[] @default([])
+  trialDays     Int      @default(0)
+  stripePriceId String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  subscriptions Subscription[]
+
+  @@map("subscription_plans")
+}
+
+// ─────────────────────────────────────────
+// SUBSCRIPTIONS
+// ─────────────────────────────────────────
+
+model Subscription {
+  id                     String    @id @default(cuid())
+  userId                 String    @unique
+  planId                 String
+  status                 String    // trial | active | past_due | cancelled | expired
+  startDate              DateTime
+  trialStartDate         DateTime?
+  trialEndDate           DateTime?
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  cancelledAt            DateTime?
+  cancelAtPeriodEnd      Boolean   @default(false)
+  endedAt                DateTime?
+  cancellationReason     String?
+  stripeCustomerId       String?
+  stripeSubscriptionId   String?
+  stripePaymentMethodId  String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  // Relations
+  user         User               @relation(fields: [userId], references: [id])
+  plan         SubscriptionPlan   @relation(fields: [planId], references: [id])
+  parkingLots  ParkingLot[]
+  invoices     SubscriptionInvoice[]
+  payments     Payment[]
+  notifications Notification[]
+
+  @@map("subscriptions")
+}
+
+// ─────────────────────────────────────────
+// SUBSCRIPTION INVOICES
+// ─────────────────────────────────────────
+
+model SubscriptionInvoice {
+  id             String    @id @default(cuid())
+  subscriptionId String
+  stripeInvoiceId String?
+  amount         Decimal   @db.Decimal(10, 2)
+  tax            Decimal   @default(0) @db.Decimal(10, 2)
+  status         String    // pending | completed | failed
+  paidAt         DateTime?
+  dueDate        DateTime?
+  periodStart    DateTime?
+  periodEnd      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Relations
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id])
+
+  @@map("subscription_invoices")
+}
+
+// ─────────────────────────────────────────
+// PARKING LOTS
+// ─────────────────────────────────────────
+
+model ParkingLot {
+  id                     String    @id @default(cuid())
+  ownerId                String
+  subscriptionId         String?
+  name                   String
+  description            String?
+  address                String
+  city                   String    @default("San Cristóbal de las Casas")
+  state                  String    @default("Chiapas")
+  postalCode             String?
+  latitude               Decimal   @db.Decimal(10, 8)
+  longitude              Decimal   @db.Decimal(11, 8)
+  totalSpots             Int
+  availableSpots         Int
+  status                 String    @default("pending_approval") // pending_approval | active | inactive | suspended_payment
+  basePricePerHour       Decimal   @db.Decimal(10, 2)
+  overtimeRatePerHour    Decimal   @db.Decimal(10, 2)
+  operatingHours         Json?
+  features               String[]  @default([])
+  images                 String[]  @default([])
+  ratingAverage          Decimal   @default(0) @db.Decimal(3, 2)
+  totalReviews           Int       @default(0)
+  approvedAt             DateTime?
+  approvedBy             String?
+  subscriptionVerifiedAt DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  // Relations
+  owner        User           @relation(fields: [ownerId], references: [id])
+  subscription Subscription?  @relation(fields: [subscriptionId], references: [id])
+  spots        ParkingSpot[]
+  reservations Reservation[]
+  reviews      Review[]
+
+  @@map("parking_lots")
+}
+
+// ─────────────────────────────────────────
+// PARKING SPOTS
+// ─────────────────────────────────────────
+
+model ParkingSpot {
+  id           String   @id @default(cuid())
+  parkingLotId String
+  spotNumber   String
+  status       String   @default("available") // available | occupied | reserved | maintenance
+  vehicleType  String   @default("car")
+  floor        String?
+  section      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  parkingLot   ParkingLot    @relation(fields: [parkingLotId], references: [id])
+  reservations Reservation[]
+
+  @@unique([parkingLotId, spotNumber])
+  @@map("parking_spots")
+}
+
+// ─────────────────────────────────────────
+// RESERVATIONS
+// ─────────────────────────────────────────
+
+model Reservation {
+  id               String    @id @default(cuid())
+  reservationCode  String    @unique
+  userId           String
+  parkingLotId     String
+  parkingSpotId    String?
+  vehicleId        String?
+  startTime        DateTime
+  endTime          DateTime
+  actualExitTime   DateTime?
+  checkInTime      DateTime?
+  reservedHours    Decimal   @db.Decimal(8, 2)
+  baseCost         Decimal   @db.Decimal(10, 2)
+  overtimeCost     Decimal   @default(0) @db.Decimal(10, 2)
+  totalCost        Decimal   @db.Decimal(10, 2)
+  commissionRate   Decimal   @db.Decimal(5, 2)
+  commissionAmount Decimal   @db.Decimal(10, 2)
+  status           String    @default("pending") // pending | confirmed | active | completed | cancelled | no_show
+  notes            String?
+  overtimeHours    Decimal?  @db.Decimal(8, 2)
+  cancelledAt      DateTime?
+  cancellationReason String?
+  completedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  // Relations
+  user           User           @relation(fields: [userId], references: [id])
+  parkingLot     ParkingLot     @relation(fields: [parkingLotId], references: [id])
+  parkingSpot    ParkingSpot?   @relation(fields: [parkingSpotId], references: [id])
+  vehicle        Vehicle?       @relation(fields: [vehicleId], references: [id])
+  payments       Payment[]
+  review         Review?
+  overtimeCharge OvertimeCharge?
+  notifications  Notification[]
+
+  @@map("reservations")
+}
+
+// ─────────────────────────────────────────
+// OVERTIME CHARGES
+// ─────────────────────────────────────────
+
+model OvertimeCharge {
+  id            String    @id @default(cuid())
+  reservationId String    @unique
+  hoursOvertime Decimal   @db.Decimal(8, 2)
+  ratePerHour   Decimal   @db.Decimal(10, 2)
+  totalCharge   Decimal   @db.Decimal(10, 2)
+  isPaid        Boolean   @default(false)
+  paidAt        DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  reservation   Reservation @relation(fields: [reservationId], references: [id])
+
+  @@map("overtime_charges")
+}
+
+// ─────────────────────────────────────────
+// PAYMENTS
+// ─────────────────────────────────────────
+
+model Payment {
+  id               String    @id @default(cuid())
+  userId           String
+  paymentType      String    // reservation | subscription | overtime | refund
+  reservationId    String?
+  subscriptionId   String?
+  amount           Decimal   @db.Decimal(10, 2)
+  commissionAmount Decimal   @default(0) @db.Decimal(10, 2)
+  netAmount        Decimal   @db.Decimal(10, 2)
+  paymentMethod    String    // card | cash | transfer
+  status           String    // pending | completed | failed | refunded
+  paymentIntentId  String?
+  transactionId    String?
+  metadata         Json?
+  completedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  // Relations
+  user         User          @relation(fields: [userId], references: [id])
+  reservation  Reservation?  @relation(fields: [reservationId], references: [id])
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id])
+
+  @@map("payments")
+}
+
+// ─────────────────────────────────────────
+// REVIEWS
+// ─────────────────────────────────────────
+
+model Review {
+  id               String    @id @default(cuid())
+  userId           String
+  parkingLotId     String
+  reservationId    String    @unique
+  rating           Int       // 1-5
+  comment          String?
+  ownerResponse    String?
+  ownerResponseAt  DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  // Relations
+  user         User        @relation(fields: [userId], references: [id])
+  parkingLot   ParkingLot  @relation(fields: [parkingLotId], references: [id])
+  reservation  Reservation @relation(fields: [reservationId], references: [id])
+
+  @@unique([userId, reservationId])
+  @@map("reviews")
+}
+
+// ─────────────────────────────────────────
+// NOTIFICATIONS
+// ─────────────────────────────────────────
+
+model Notification {
+  id             String    @id @default(cuid())
+  userId         String
+  type           String    // reservation_confirmed | reservation_reminder | overtime_warning | overtime_charged | payment_received | payment_failed | subscription_expiring | subscription_expired | parking_approved | general
+  title          String
+  message        String
+  isRead         Boolean   @default(false)
+  isSent         Boolean   @default(false)
+  readAt         DateTime?
+  sentAt         DateTime?
+  reservationId  String?
+  subscriptionId String?
+  data           Json?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Relations
+  user         User          @relation(fields: [userId], references: [id])
+  reservation  Reservation?  @relation(fields: [reservationId], references: [id])
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id])
+
+  @@map("notifications")
+}
+
+// ─────────────────────────────────────────
+// PUSH TOKENS
+// ─────────────────────────────────────────
+
+model PushToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  platform  String   // ios | android | web
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("push_tokens")
+}
