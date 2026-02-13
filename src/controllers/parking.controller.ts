@@ -1,6 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from '@/types/interfaces';
 import prisma from '@/config/database';
+import cloudinaryService from '@/integrations/cloudinary.client';
 import { sendSuccess, sendError } from '@/utils/response';
 import { calculateDistance } from '@/utils/helpers';
 import logger from '@/utils/logger';
@@ -15,11 +16,8 @@ export class ParkingController {
       const lng = parseFloat(longitude as string);
       const rad = parseInt(radius as string, 10);
 
-      // Obtener todos los estacionamientos activos
       const parkings = await prisma.parkingLot.findMany({
-        where: {
-          status: 'active'
-        },
+        where: { status: 'active' },
         include: {
           owner: {
             select: {
@@ -31,7 +29,6 @@ export class ParkingController {
         }
       });
 
-      // Filtrar por distancia
       const nearbyParkings = parkings
         .map(parking => ({
           ...parking,
@@ -93,6 +90,7 @@ export class ParkingController {
     try {
       const userId = req.user!.userId;
       const parkingData = req.body;
+      const files = req.files as Express.Multer.File[];
 
       // Verificar suscripción activa
       const subscription = await prisma.subscription.findFirst({
@@ -123,7 +121,7 @@ export class ParkingController {
         sendError(
           res,
           'LIMIT_EXCEEDED',
-          `Has alcanzado el límite de ${subscription.plan.maxParkingLots} estacionamientos de tu plan`,
+          `Has alcanzado el límite de ${subscription.plan.maxParkingLots} estacionamientos`,
           403
         );
         return;
@@ -142,6 +140,18 @@ export class ParkingController {
         return;
       }
 
+      // Subir imágenes a Cloudinary
+      const imageUrls: string[] = [];
+
+      if (files && files.length > 0) {
+        for (const file of files) {
+          const result = await cloudinaryService.uploadBuffer(file.buffer, {
+            folder: 'parking-top/parkings'
+          });
+          imageUrls.push(result.secureUrl);
+        }
+      }
+
       // Crear estacionamiento
       const parking = await prisma.parkingLot.create({
         data: {
@@ -155,12 +165,12 @@ export class ParkingController {
           postalCode: parkingData.postalCode,
           latitude: parkingData.latitude,
           longitude: parkingData.longitude,
-          totalSpots: parkingData.totalSpots,
-          availableSpots: parkingData.totalSpots,
-          basePricePerHour: parkingData.basePricePerHour,
-          overtimeRatePerHour: parkingData.overtimeRatePerHour,
+          totalSpots: parseInt(parkingData.totalSpots),
+          availableSpots: parseInt(parkingData.totalSpots),
+          basePricePerHour: parseFloat(parkingData.basePricePerHour),
+          overtimeRatePerHour: parseFloat(parkingData.overtimeRatePerHour),
           features: parkingData.features || [],
-          images: parkingData.images || [],
+          images: imageUrls,
           operatingHours: parkingData.operatingHours || {},
           status: 'pending_approval',
           subscriptionVerifiedAt: new Date()
@@ -168,19 +178,14 @@ export class ParkingController {
       });
 
       // Crear espacios
-      const spots = [];
-      for (let i = 1; i <= parkingData.totalSpots; i++) {
-        spots.push({
-          parkingLotId: parking.id,
-          spotNumber: `${i}`,
-          status: 'available' as const,
-          vehicleType: 'car' as const
-        });
-      }
+      const spots = Array.from({ length: parseInt(parkingData.totalSpots) }, (_, i) => ({
+        parkingLotId: parking.id,
+        spotNumber: String(i + 1),
+        status: 'available' as const,
+        vehicleType: 'car' as const
+      }));
 
-      await prisma.parkingSpot.createMany({
-        data: spots
-      });
+      await prisma.parkingSpot.createMany({ data: spots });
 
       sendSuccess(res, parking, 201);
     } catch (error: any) {
@@ -194,10 +199,9 @@ export class ParkingController {
       const { id } = req.params;
       const userId = req.user!.userId;
       const updateData = req.body;
+      const files = req.files as Express.Multer.File[];
 
-      const parking = await prisma.parkingLot.findUnique({
-        where: { id }
-      });
+      const parking = await prisma.parkingLot.findUnique({ where: { id } });
 
       if (!parking) {
         sendError(res, 'NOT_FOUND', 'Estacionamiento no encontrado', 404);
@@ -209,9 +213,33 @@ export class ParkingController {
         return;
       }
 
+      // Subir nuevas imágenes si se enviaron
+      let imageUrls: string[] | undefined;
+
+      if (files && files.length > 0) {
+        imageUrls = [];
+
+        // Eliminar imágenes anteriores de Cloudinary
+        for (const oldUrl of parking.images) {
+          const publicId = cloudinaryService.extractPublicId(oldUrl);
+          await cloudinaryService.deleteImage(publicId).catch(() => {});
+        }
+
+        // Subir nuevas imágenes
+        for (const file of files) {
+          const result = await cloudinaryService.uploadBuffer(file.buffer, {
+            folder: 'parking-top/parkings'
+          });
+          imageUrls.push(result.secureUrl);
+        }
+      }
+
       const updated = await prisma.parkingLot.update({
         where: { id },
-        data: updateData
+        data: {
+          ...updateData,
+          ...(imageUrls && { images: imageUrls })
+        }
       });
 
       sendSuccess(res, updated);
@@ -225,9 +253,7 @@ export class ParkingController {
       const { id } = req.params;
       const userId = req.user!.userId;
 
-      const parking = await prisma.parkingLot.findUnique({
-        where: { id }
-      });
+      const parking = await prisma.parkingLot.findUnique({ where: { id } });
 
       if (!parking) {
         sendError(res, 'NOT_FOUND', 'Estacionamiento no encontrado', 404);

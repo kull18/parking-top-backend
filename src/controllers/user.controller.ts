@@ -1,6 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from '@/types/interfaces';
 import prisma from '@/config/database';
+import cloudinaryService from '@/integrations/cloudinary.client';
 import { sendSuccess, sendError } from '@/utils/response';
 
 export class UserController {
@@ -39,15 +40,11 @@ export class UserController {
   async updateProfile(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user!.userId;
-      const { fullName, phone, profileImageUrl } = req.body;
+      const { fullName, phone } = req.body;
 
       const user = await prisma.user.update({
         where: { id: userId },
-        data: {
-          fullName,
-          phone,
-          profileImageUrl
-        },
+        data: { fullName, phone },
         select: {
           id: true,
           email: true,
@@ -58,6 +55,48 @@ export class UserController {
       });
 
       sendSuccess(res, user);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async uploadProfileImage(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user!.userId;
+      const file = req.file as Express.Multer.File;
+
+      if (!file) {
+        sendError(res, 'NO_FILE', 'No se proporcionó imagen', 400);
+        return;
+      }
+
+      // Eliminar imagen anterior de Cloudinary si existe
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+
+      if (user?.profileImageUrl) {
+        const publicId = cloudinaryService.extractPublicId(user.profileImageUrl);
+        await cloudinaryService.deleteImage(publicId).catch(() => {});
+      }
+
+      // Subir nueva imagen
+      const result = await cloudinaryService.uploadBuffer(file.buffer, {
+        folder: 'parking-top/profiles',
+        publicId: `user-${userId}`,
+        width: 400,
+        height: 400
+      });
+
+      // Actualizar usuario
+      const updated = await prisma.user.update({
+        where: { id: userId },
+        data: { profileImageUrl: result.secureUrl },
+        select: {
+          id: true,
+          profileImageUrl: true
+        }
+      });
+
+      sendSuccess(res, updated);
     } catch (error) {
       next(error);
     }
@@ -83,7 +122,6 @@ export class UserController {
       const userId = req.user!.userId;
       const { licensePlate, brand, model, color, vehicleType, isDefault } = req.body;
 
-      // Si es default, quitar default de otros vehículos
       if (isDefault) {
         await prisma.vehicle.updateMany({
           where: { userId },
@@ -119,9 +157,7 @@ export class UserController {
       const { id } = req.params;
       const { brand, model, color, vehicleType, isDefault } = req.body;
 
-      const vehicle = await prisma.vehicle.findFirst({
-        where: { id, userId }
-      });
+      const vehicle = await prisma.vehicle.findFirst({ where: { id, userId } });
 
       if (!vehicle) {
         sendError(res, 'VEHICLE_NOT_FOUND', 'Vehículo no encontrado', 404);
@@ -151,9 +187,7 @@ export class UserController {
       const userId = req.user!.userId;
       const { id } = req.params;
 
-      const vehicle = await prisma.vehicle.findFirst({
-        where: { id, userId }
-      });
+      const vehicle = await prisma.vehicle.findFirst({ where: { id, userId } });
 
       if (!vehicle) {
         sendError(res, 'VEHICLE_NOT_FOUND', 'Vehículo no encontrado', 404);
@@ -186,10 +220,7 @@ export class UserController {
         where: { userId, isRead: false }
       });
 
-      sendSuccess(res, {
-        notifications,
-        unreadCount
-      });
+      sendSuccess(res, { notifications, unreadCount });
     } catch (error) {
       next(error);
     }
@@ -200,9 +231,7 @@ export class UserController {
       const userId = req.user!.userId;
       const { id } = req.params;
 
-      const notification = await prisma.notification.findFirst({
-        where: { id, userId }
-      });
+      const notification = await prisma.notification.findFirst({ where: { id, userId } });
 
       if (!notification) {
         sendError(res, 'NOTIFICATION_NOT_FOUND', 'Notificación no encontrada', 404);

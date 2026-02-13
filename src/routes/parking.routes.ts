@@ -2,6 +2,7 @@ import { Router } from 'express';
 import parkingController from '@/controllers/parking.controller';
 import { authenticate, authorize, checkActiveSubscription } from '@/middlewares/auth.middleware';
 import { validateRequest, validateQuery } from '@/middlewares/validation.middleware';
+import { upload, handleUploadError } from '@/middlewares/upload.middleware';
 import { createParkingSchema, nearbyParkingSchema } from '@/utils/validators';
 import { UserRole } from '@/types/enums';
 
@@ -16,13 +17,23 @@ router.use(authenticate);
 router.use(authorize(UserRole.OWNER));
 
 router.get('/owner/my-parkings', parkingController.getOwnerParkings);
+
 router.post(
   '/',
   checkActiveSubscription,
+  upload.array('images', 10),
+  handleUploadError,
   validateRequest(createParkingSchema),
   parkingController.create
 );
-router.put('/:id', parkingController.update);
+
+router.put(
+  '/:id',
+  upload.array('images', 10),
+  handleUploadError,
+  parkingController.update
+);
+
 router.delete('/:id', parkingController.delete);
 
 export default router;

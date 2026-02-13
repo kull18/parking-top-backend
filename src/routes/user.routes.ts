@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import userController from '@/controllers/user.controller';
 import { authenticate } from '@/middlewares/auth.middleware';
+import { upload, handleUploadError } from '@/middlewares/upload.middleware';
 
 const router = Router();
 
@@ -10,6 +11,12 @@ router.use(authenticate);
 // Perfil
 router.get('/profile', userController.getProfile);
 router.put('/profile', userController.updateProfile);
+router.post(
+  '/profile/image',
+  upload.single('image'),
+  handleUploadError,
+  userController.uploadProfileImage
+);
 
 // Vehículos
 router.get('/vehicles', userController.getVehicles);

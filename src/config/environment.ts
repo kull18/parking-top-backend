@@ -51,11 +51,10 @@ export const config = {
     databaseUrl: process.env.FCM_DATABASE_URL || ''
   },
 
-supabase: {
-  url: process.env.SUPABASE_URL || '',
-  anonKey: process.env.SUPABASE_ANON_KEY || '',
-  serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
-  storageBucket: process.env.SUPABASE_STORAGE_BUCKET || 'parking-images'
+cloudinary: {
+  cloudName: process.env.CLOUDINARY_CLOUD_NAME || '',
+  apiKey: process.env.CLOUDINARY_API_KEY || '',
+  apiSecret: process.env.CLOUDINARY_API_SECRET || ''
 },
   maps: {
     googleApiKey: process.env.GOOGLE_MAPS_API_KEY || '',
