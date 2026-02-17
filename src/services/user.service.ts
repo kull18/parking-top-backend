@@ -1,98 +1,135 @@
-import prisma from '@/config/database';
-import { UserRole } from '@/types/enums';
+import userRepository from '@/repositories/user.repository';
+import vehicleRepository from '@/repositories/vehicle.repository';
 import logger from '@/utils/logger';
 
 export class UserService {
-  
-  async getUserById(id: string) {
-    return await prisma.user.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        email: true,
-        fullName: true,
-        phone: true,
-        role: true,
-        status: true,
-        profileImageUrl: true,
-        emailVerified: true,
-        phoneVerified: true,
-        createdAt: true
-      }
-    });
+
+  async getUserById(userId: string) {
+    const user = await userRepository.findById(userId);
+
+    if (!user) {
+      throw new Error('USER_NOT_FOUND');
+    }
+
+    return user;
   }
 
-  async updateUser(id: string, data: {
+  async updateUser(userId: string, data: {
     fullName?: string;
     phone?: string;
     profileImageUrl?: string;
   }) {
-    return await prisma.user.update({
-      where: { id },
-      data
-    });
+    return await userRepository.update(userId, data);
   }
 
-  async getUserStats(userId: string, role: UserRole) {
+  async getUserStats(userId: string, role: 'customer' | 'owner') {
     if (role === 'customer') {
-      return await this.getCustomerStats(userId);
-    } else if (role === 'owner') {
-      return await this.getOwnerStats(userId);
+      const [totalReservations, activeReservations, totalSpent] = await Promise.all([
+        userRepository.countReservations(userId),
+        userRepository.countActiveReservations(userId),
+        userRepository.getTotalSpent(userId)
+      ]);
+
+      return {
+        totalReservations,
+        activeReservations,
+        totalSpent
+      };
     }
-    return null;
+
+    if (role === 'owner') {
+      const [totalParkings, totalReservations, totalRevenue] = await Promise.all([
+        userRepository.countParkingsByOwner(userId),
+        userRepository.countReservationsByOwner(userId),
+        userRepository.getTotalRevenueByOwner(userId)
+      ]);
+
+      return {
+        totalParkings,
+        totalReservations,
+        totalRevenue
+      };
+    }
+
+    return {};
   }
 
-  private async getCustomerStats(userId: string) {
-    const [totalReservations, activeReservations, totalSpent] = await Promise.all([
-      prisma.reservation.count({
-        where: { userId }
-      }),
-      prisma.reservation.count({
-        where: { userId, status: { in: ['confirmed', 'active'] } }
-      }),
-      prisma.payment.aggregate({
-        where: {
-          userId,
-          paymentType: 'reservation',
-          status: 'completed'
-        },
-        _sum: { amount: true }
-      })
-    ]);
+  // ========== VEHÍCULOS ==========
 
-    return {
-      totalReservations,
-      activeReservations,
-      totalSpent: totalSpent._sum.amount || 0
-    };
+  async getVehicles(userId: string) {
+    return await vehicleRepository.findByUserId(userId);
   }
 
-  private async getOwnerStats(userId: string) {
-    const [totalParkings, totalReservations, totalRevenue] = await Promise.all([
-      prisma.parkingLot.count({
-        where: { ownerId: userId, status: { not: 'inactive' } }
-      }),
-      prisma.reservation.count({
-        where: {
-          parkingLot: { ownerId: userId }
-        }
-      }),
-      prisma.payment.aggregate({
-        where: {
-          reservation: {
-            parkingLot: { ownerId: userId }
-          },
-          status: 'completed'
-        },
-        _sum: { netAmount: true }
-      })
-    ]);
+  async addVehicle(userId: string, data: {
+    licensePlate: string;
+    brand?: string;
+    model?: string;
+    color?: string;
+    vehicleType?: string;
+    isDefault?: boolean;
+  }) {
+    try {
+      // Si es default, quitar default de otros vehículos
+      if (data.isDefault) {
+        await vehicleRepository.unsetDefaultForUser(userId);
+      }
 
-    return {
-      totalParkings,
-      totalReservations,
-      totalRevenue: totalRevenue._sum.netAmount || 0
-    };
+      const vehicle = await vehicleRepository.create({
+        userId,
+        licensePlate: data.licensePlate,
+        brand: data.brand,
+        model: data.model,
+        color: data.color,
+        vehicleType: data.vehicleType || 'car',
+        isDefault: data.isDefault || false
+      });
+
+      logger.info(`Vehicle added for user ${userId}: ${vehicle.id}`);
+
+      return vehicle;
+    } catch (error: any) {
+      if (error.code === 'P2002') {
+        throw new Error('DUPLICATE_VEHICLE');
+      }
+      throw error;
+    }
+  }
+
+  async updateVehicle(userId: string, vehicleId: string, data: {
+    brand?: string;
+    model?: string;
+    color?: string;
+    vehicleType?: string;
+    isDefault?: boolean;
+  }) {
+    const vehicle = await vehicleRepository.findByUserIdAndId(userId, vehicleId);
+
+    if (!vehicle) {
+      throw new Error('VEHICLE_NOT_FOUND');
+    }
+
+    // Si se marca como default, quitar default de otros
+    if (data.isDefault) {
+      await vehicleRepository.unsetDefaultForUser(userId, vehicleId);
+    }
+
+    const updated = await vehicleRepository.update(vehicleId, data);
+
+    logger.info(`Vehicle updated: ${vehicleId}`);
+
+    return updated;
+  }
+
+  async deleteVehicle(userId: string, vehicleId: string) {
+    const vehicle = await vehicleRepository.findByUserIdAndId(userId, vehicleId);
+
+    if (!vehicle) {
+      throw new Error('VEHICLE_NOT_FOUND');
+    }
+
+    await vehicleRepository.delete(vehicleId);
+
+    logger.info(`Vehicle deleted: ${vehicleId}`);
   }
 }
 
