@@ -1,169 +1,89 @@
+import prisma from '@/config/database';
 import bcrypt from 'bcryptjs';
-import jwt, { SignOptions } from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
 import { config } from '@/config/environment';
-import { IAuthResponse, IUserResponse, IAuthTokenPayload } from '@/types/interfaces';
-import { UserRole, UserStatus } from '@/types/enums';
 import logger from '@/utils/logger';
-import userRepository from '@/repositories/user.repository';
 
 export class AuthService {
 
-  async register(data: {
+  async registerUser(data: {
     email: string;
     password: string;
     fullName: string;
     phone?: string;
-    role: UserRole;
-  }): Promise<IAuthResponse> {
-
-    const existingUser = await userRepository.findByEmail(data.email);
-    if (existingUser) {
-      throw new Error('El email ya está registrado');
-    }
-
-    const passwordHash = await bcrypt.hash(
-      data.password,
-      config.security.bcryptRounds
-    );
-
-    const user = await userRepository.create({
-      email: data.email,
-      passwordHash,
-      fullName: data.fullName,
-      phone: data.phone,
-      role: data.role
+    role?: string;
+    profileImageUrl?: string;
+  }) {
+    // Verificar si el email ya existe
+    const existingUser = await prisma.user.findUnique({
+      where: { email: data.email }
     });
 
-    const token = this.generateToken(user.id, user.email, user.role as UserRole);
-    const refreshToken = this.generateRefreshToken(user.id);
+    if (existingUser) {
+      throw new Error('EMAIL_TAKEN');
+    }
 
-    logger.info(`User registered: ${user.email}`);
+    // Hashear password
+    const passwordHash = await bcrypt.hash(data.password, config.security.bcryptRounds);
 
-    return {
-      user: this.formatUserResponse(user),
-      token,
-      refreshToken
-    };
+    // Crear usuario
+    const user = await prisma.user.create({
+      data: {
+        email: data.email,
+        passwordHash,
+        fullName: data.fullName,
+        phone: data.phone,
+        role: data.role || 'customer',
+        status: 'active',
+        profileImageUrl: data.profileImageUrl,
+        emailVerified: false,
+        phoneVerified: false
+      },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        phone: true,
+        role: true,
+        status: true,
+        profileImageUrl: true,
+        emailVerified: true,
+        createdAt: true
+      }
+    });
+
+    logger.info(`User registered: ${user.id} (${user.email})`);
+
+    return user;
   }
 
-  async login(email: string, password: string): Promise<IAuthResponse> {
+  async loginUser(email: string, password: string) {
+    // Buscar usuario
+    const user = await prisma.user.findUnique({ where: { email } });
 
-    const user = await userRepository.findByEmail(email);
     if (!user) {
-      throw new Error('Credenciales inválidas');
+      throw new Error('INVALID_CREDENTIALS');
     }
 
-    const isValidPassword = await bcrypt.compare(password, user.passwordHash);
-    if (!isValidPassword) {
-      throw new Error('Credenciales inválidas');
+    if (user.status !== 'active') {
+      throw new Error('ACCOUNT_SUSPENDED');
     }
 
-    if (user.status !== UserStatus.ACTIVE) {
-      throw new Error('Tu cuenta está inactiva o suspendida');
+    // Verificar password
+    const isValid = await bcrypt.compare(password, user.passwordHash);
+
+    if (!isValid) {
+      throw new Error('INVALID_CREDENTIALS');
     }
 
-    await userRepository.updateLastLogin(user.id);
+    // Actualizar último login
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() }
+    });
 
-    const token = this.generateToken(user.id, user.email, user.role as UserRole);
-    const refreshToken = this.generateRefreshToken(user.id);
+    logger.info(`User logged in: ${user.id}`);
 
-    logger.info(`User logged in: ${user.email}`);
-
-    return {
-      user: this.formatUserResponse(user),
-      token,
-      refreshToken
-    };
-  }
-
-  async refreshToken(refreshToken: string) {
-    const decoded = jwt.verify(
-      refreshToken,
-      config.jwt.refreshSecret
-    ) as { userId: string };
-
-    const user = await userRepository.findById(decoded.userId);
-    if (!user || user.status !== UserStatus.ACTIVE) {
-      throw new Error('Token inválido');
-    }
-
-    return {
-      token: this.generateToken(user.id, user.email, user.role as UserRole),
-      refreshToken: this.generateRefreshToken(user.id)
-    };
-  }
-
-  async getMe(userId: string): Promise<IUserResponse> {
-    const user = await userRepository.findById(userId);
-    if (!user) {
-      throw new Error('Usuario no encontrado');
-    }
-    return this.formatUserResponse(user);
-  }
-
-  async updateProfile(
-    userId: string,
-    data: {
-      fullName?: string;
-      phone?: string;
-      profileImageUrl?: string;
-    }
-  ): Promise<IUserResponse> {
-
-    const user = await userRepository.update(userId, data);
-    return this.formatUserResponse(user);
-  }
-
-  async changePassword(
-    userId: string,
-    currentPassword: string,
-    newPassword: string
-  ): Promise<void> {
-
-    const user = await userRepository.findById(userId);
-    if (!user) throw new Error('Usuario no encontrado');
-
-    const isValid = await bcrypt.compare(currentPassword, user.passwordHash);
-    if (!isValid) throw new Error('Contraseña actual incorrecta');
-
-    const passwordHash = await bcrypt.hash(
-      newPassword,
-      config.security.bcryptRounds
-    );
-
-    await userRepository.update(userId, { passwordHash });
-
-    logger.info(`Password changed for user ${userId}`);
-  }
-
-  // ================= TOKENS =================
-
-  private generateToken(
-    userId: string,
-    email: string,
-    role: UserRole
-  ): string {
-
-    const payload: IAuthTokenPayload = { userId, email, role };
-
-    const options: SignOptions = {
-      expiresIn: config.jwt.expiresIn
-    };
-
-    return jwt.sign(payload, config.jwt.secret, options);
-  }
-
-  private generateRefreshToken(userId: string): string {
-    return jwt.sign(
-      { userId },
-      config.jwt.refreshSecret,
-      { expiresIn: config.jwt.refreshExpiresIn }
-    );
-  }
-
-  // ================= FORMAT =================
-
-  private formatUserResponse(user: any): IUserResponse {
     return {
       id: user.id,
       email: user.email,
@@ -173,9 +93,120 @@ export class AuthService {
       status: user.status,
       profileImageUrl: user.profileImageUrl,
       emailVerified: user.emailVerified,
-      phoneVerified: user.phoneVerified,
       createdAt: user.createdAt
     };
+  }
+
+  async getUserById(userId: string) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        phone: true,
+        role: true,
+        status: true,
+        profileImageUrl: true,
+        emailVerified: true,
+        phoneVerified: true,
+        createdAt: true,
+        lastLoginAt: true
+      }
+    });
+
+    if (!user) {
+      throw new Error('USER_NOT_FOUND');
+    }
+
+    return user;
+  }
+
+  async updateUserProfile(userId: string, data: {
+    fullName?: string;
+    phone?: string;
+    profileImageUrl?: string;
+  }) {
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(data.fullName && { fullName: data.fullName }),
+        ...(data.phone && { phone: data.phone }),
+        ...(data.profileImageUrl && { profileImageUrl: data.profileImageUrl })
+      },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        phone: true,
+        profileImageUrl: true,
+        role: true,
+        status: true
+      }
+    });
+
+    return updated;
+  }
+
+  async changeUserPassword(userId: string, currentPassword: string, newPassword: string) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+
+    if (!user) {
+      throw new Error('USER_NOT_FOUND');
+    }
+
+    const isValid = await bcrypt.compare(currentPassword, user.passwordHash);
+
+    if (!isValid) {
+      throw new Error('WRONG_PASSWORD');
+    }
+
+    const newPasswordHash = await bcrypt.hash(newPassword, config.security.bcryptRounds);
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: newPasswordHash }
+    });
+
+    logger.info(`Password changed for user: ${userId}`);
+  }
+
+  generateTokens(user: { id: string; email: string; role: string }) {
+    const token = jwt.sign(
+      { userId: user.id, email: user.email, role: user.role },
+      config.jwt.secret,
+      { expiresIn: config.jwt.expiresIn } as any
+    );
+
+    const refreshToken = jwt.sign(
+      { userId: user.id },
+      config.jwt.refreshSecret,
+      { expiresIn: config.jwt.refreshExpiresIn } as any
+    );
+
+    return { token, refreshToken };
+  }
+
+  async refreshUserToken(refreshToken: string) {
+    if (!refreshToken) {
+      throw new Error('NO_TOKEN');
+    }
+
+    const payload = jwt.verify(refreshToken, config.jwt.refreshSecret) as { userId: string };
+
+    const user = await prisma.user.findUnique({ where: { id: payload.userId } });
+
+    if (!user || user.status !== 'active') {
+      throw new Error('INVALID_TOKEN');
+    }
+
+    const newToken = jwt.sign(
+      { userId: user.id, email: user.email, role: user.role },
+      config.jwt.secret,
+      { expiresIn: config.jwt.expiresIn } as any
+    );
+
+    return { token: newToken };
   }
 }
 
