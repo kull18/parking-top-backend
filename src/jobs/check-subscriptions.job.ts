@@ -1,12 +1,14 @@
 import cron from 'node-cron';
-import subscriptionService from '@/services/subscription.service';
+import subscriptionService from '@/services/subscription.service.mercadopago';
 import logger from '@/utils/logger';
 
-// Ejecutar diariamente a las 00:00
+// Verificar suscripciones expiradas - Ejecutar diariamente a las 00:00
 export const checkSubscriptionsJob = cron.schedule('0 0 * * *', async () => {
   try {
     logger.info('Running subscription check job...');
-    await subscriptionService.checkAndUpdateSubscriptions();
+    
+    await subscriptionService.checkExpiredSubscriptions();
+    
     logger.info('Subscription check job completed');
   } catch (error) {
     logger.error('Error in subscription check job:', error);
@@ -15,11 +17,13 @@ export const checkSubscriptionsJob = cron.schedule('0 0 * * *', async () => {
   scheduled: false
 });
 
-// Enviar recordatorios a las 10:00
+// Enviar recordatorios de renovación - Ejecutar diariamente a las 10:00
 export const sendRemindersJob = cron.schedule('0 10 * * *', async () => {
   try {
     logger.info('Running subscription reminders job...');
-    await subscriptionService.sendRenewalReminders();
+    
+    await subscriptionService.sendRenewalReminders(3); // 3 días antes
+    
     logger.info('Reminders job completed');
   } catch (error) {
     logger.error('Error in reminders job:', error);

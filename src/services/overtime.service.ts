@@ -4,10 +4,13 @@ import paymentRepository from '@/repositories/payment.repository';
 import notificationService from './notification.service';
 import { ReservationStatus, PaymentType, PaymentStatus, NotificationType } from '@/types/enums';
 import { calculateHoursBetween, calculateCost, calculateCommission } from '@/utils/helpers';
-import { stripeService } from '@/integrations/stripe.client';
+import mercadopagoService from '@/integrations/mercadopago.client';
 import logger from '@/utils/logger';
 import dayjs from 'dayjs';
 import prisma from '@/config/database';
+
+// Tipo para overtime con relaciones
+type OvertimeChargeWithRelations = Awaited<ReturnType<typeof overtimeRepository.findByParkingLotAndDateRange>>[0];
 
 export class OvertimeService {
   
@@ -81,7 +84,7 @@ export class OvertimeService {
   }
 
   /**
-   * Crear cargo de overtime en Stripe
+   * Crear cargo de overtime con MercadoPago
    */
   async chargeOvertime(reservationId: string, overtimeChargeId: string) {
     try {
@@ -97,15 +100,19 @@ export class OvertimeService {
         Number(reservation.commissionRate)
       );
 
-      // Crear Payment Intent en Stripe
-      const paymentIntent = await stripeService.createPaymentIntent(
-        Number(overtimeCharge.totalCharge),
-        {
+      // Crear pago en MercadoPago
+      const mpPayment = await mercadopagoService.createPayment({
+        id: parseInt(overtimeChargeId.slice(-8), 16), // Convertir parte del ID a número
+        amount: Number(overtimeCharge.totalCharge),
+        description: `Cargo por tiempo extra - Reserva ${reservation.reservationCode}`,
+        payerEmail: reservation.user.email,
+        metadata: {
           reservationId,
           overtimeChargeId,
-          userId: reservation.userId
+          userId: reservation.userId,
+          type: 'overtime'
         }
-      );
+      });
 
       // Crear registro de pago
       await paymentRepository.create({
@@ -115,14 +122,17 @@ export class OvertimeService {
         amount: Number(overtimeCharge.totalCharge),
         commissionAmount,
         netAmount: Number(overtimeCharge.totalCharge) - commissionAmount,
-        paymentMethod: 'card',
+        paymentMethod: 'mercadopago',
         status: PaymentStatus.PENDING,
-        paymentIntentId: paymentIntent.id
+        transactionId: mpPayment.id
       });
 
       logger.info(`Overtime charge created for reservation ${reservationId}`);
 
-      return paymentIntent;
+      return {
+        paymentId: mpPayment.id,
+        paymentUrl: mpPayment.init_point
+      };
     } catch (error) {
       logger.error('Error charging overtime:', error);
       throw error;
@@ -245,32 +255,28 @@ export class OvertimeService {
         endDate
       );
 
-// Al inicio del archivo overtime.service.ts
-type OvertimeChargeWithRelations = Awaited<ReturnType<typeof overtimeRepository.findByParkingLotAndDateRange>>[0];
+      const totalOvertimeRevenue = overtimeCharges.reduce(
+        (sum: number, charge: OvertimeChargeWithRelations) => sum + Number(charge.totalCharge),
+        0
+      );
 
-// Luego en el método:
-const totalOvertimeRevenue = overtimeCharges.reduce(
-  (sum: number, charge: OvertimeChargeWithRelations) => sum + Number(charge.totalCharge),
-  0
-);
+      const totalOvertimeHours = overtimeCharges.reduce(
+        (sum: number, charge: OvertimeChargeWithRelations) => sum + Number(charge.hoursOvertime),
+        0
+      );
 
-const totalOvertimeHours = overtimeCharges.reduce(
-  (sum: number, charge: OvertimeChargeWithRelations) => sum + Number(charge.hoursOvertime),
-  0
-);
+      const paidCharges = overtimeCharges.filter((c: OvertimeChargeWithRelations) => c.isPaid);
+      const unpaidCharges = overtimeCharges.filter((c: OvertimeChargeWithRelations) => !c.isPaid);
 
-const paidCharges = overtimeCharges.filter((c: OvertimeChargeWithRelations) => c.isPaid);
-const unpaidCharges = overtimeCharges.filter((c: OvertimeChargeWithRelations) => !c.isPaid);
+      const paidRevenue = paidCharges.reduce(
+        (sum: number, charge: OvertimeChargeWithRelations) => sum + Number(charge.totalCharge),
+        0
+      );
 
-const paidRevenue = paidCharges.reduce(
-  (sum: number, charge: OvertimeChargeWithRelations) => sum + Number(charge.totalCharge),
-  0
-);
-
-const unpaidRevenue = unpaidCharges.reduce(
-  (sum: number, charge: OvertimeChargeWithRelations) => sum + Number(charge.totalCharge),
-  0
-);
+      const unpaidRevenue = unpaidCharges.reduce(
+        (sum: number, charge: OvertimeChargeWithRelations) => sum + Number(charge.totalCharge),
+        0
+      );
 
       return {
         overtimeCharges,
