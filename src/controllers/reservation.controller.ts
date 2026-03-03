@@ -3,12 +3,8 @@ import { AuthRequest } from '@/types/interfaces';
 import reservationService from '@/services/reservation.service';
 import { sendSuccess, sendError } from '@/utils/response';
 import logger from '@/utils/logger';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
 
 export class ReservationController {
-
 
   async create(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
@@ -33,9 +29,9 @@ export class ReservationController {
   async processPayment(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const { reservationId } = req.params;
-      const { paymentMethodId } = req.body;
 
-      const result = await reservationService.processPayment(reservationId, paymentMethodId);
+      // MercadoPago no necesita paymentMethodId, se ingresa en su página
+      const result = await reservationService.processPayment(reservationId);
 
       sendSuccess(res, result);
     } catch (error: any) {
@@ -115,22 +111,7 @@ export class ReservationController {
     try {
       const { id } = req.params;
 
-      const reservation = await prisma.reservation.findUnique({
-        where: { id },
-        include: {
-          parkingLot: true,
-          parkingSpot: true,
-          vehicle: true,
-          user: {
-            select: {
-              id: true,
-              fullName: true,
-              email: true,
-              phone: true
-            }
-          }
-        }
-      });
+      const reservation = await reservationService.getById(id);
 
       if (!reservation) {
         sendError(res, 'NOT_FOUND', 'Reserva no encontrada', 404);

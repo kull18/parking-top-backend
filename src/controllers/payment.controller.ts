@@ -34,34 +34,27 @@ export class PaymentController {
     }
   }
 
-  async createPaymentIntent(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  async getPaymentStatus(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const userId = req.user!.userId;
-      const { amount, paymentType, reservationId, subscriptionId } = req.body;
+      const { transactionId } = req.params;
 
-      const result = await paymentService.createPaymentIntent(
-        userId,
-        amount,
-        paymentType,
-        reservationId,
-        subscriptionId
-      );
+      const status = await paymentService.getPaymentStatus(transactionId);
 
-      sendSuccess(res, result);
+      sendSuccess(res, status);
     } catch (error: any) {
-      sendError(res, 'PAYMENT_INTENT_ERROR', error.message, 400);
+      sendError(res, 'PAYMENT_STATUS_ERROR', error.message, 400);
     }
   }
 
-  async confirmPayment(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  async getPaymentStats(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { paymentIntentId } = req.body;
+      const userId = req.user!.userId;
 
-      const result = await paymentService.confirmPayment(paymentIntentId);
+      const stats = await paymentService.getPaymentStats(userId);
 
-      sendSuccess(res, result);
-    } catch (error: any) {
-      sendError(res, 'PAYMENT_CONFIRMATION_ERROR', error.message, 400);
+      sendSuccess(res, stats);
+    } catch (error) {
+      next(error);
     }
   }
 }
