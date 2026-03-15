@@ -17,6 +17,44 @@ export class PaymentController {
     }
   }
 
+  async createPaymentIntent(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const userId = req.user!.userId;
+    const { amount, paymentType, description, userEmail, reservationId, subscriptionId } = req.body;
+
+    const result = await paymentService.createPayment(
+      userId,
+      amount,
+      paymentType,
+      description,
+      userEmail,
+      reservationId,
+      subscriptionId
+    );
+
+    sendSuccess(res, result, 201);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async confirmPayment(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { transactionId } = req.body;
+
+    const payment = await paymentService.confirmPayment(transactionId);
+
+    if (!payment) {
+      sendError(res, 'NOT_FOUND', 'Transacción no encontrada', 404);
+      return;
+    }
+
+    sendSuccess(res, payment);
+  } catch (error) {
+    next(error);
+  }
+}
+
   async getPaymentById(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const { id } = req.params;

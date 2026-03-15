@@ -22,15 +22,13 @@ export class SubscriptionRepository {
   async findByUserId(userId: string) {
     return await prisma.subscription.findUnique({
       where: { userId },
-      include: {
-        plan: true
-      }
+      include: { plan: true }
     });
   }
 
-  async findByStripeSubscriptionId(stripeSubscriptionId: string) {
+  async findByMpSubscriptionId(mpSubscriptionId: string) {
     return await prisma.subscription.findFirst({
-      where: { stripeSubscriptionId },
+      where: { mpSubscriptionId },
       include: {
         user: true,
         plan: true
@@ -44,9 +42,7 @@ export class SubscriptionRepository {
         userId,
         status: { in: [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIAL] }
       },
-      include: {
-        plan: true
-      }
+      include: { plan: true }
     });
   }
 
@@ -59,9 +55,8 @@ export class SubscriptionRepository {
     trialEndDate?: Date;
     currentPeriodStart?: Date;
     currentPeriodEnd?: Date;
-    stripeCustomerId?: string;
-    stripeSubscriptionId?: string;
-    stripePaymentMethodId?: string;
+    mpSubscriptionId?: string;
+    mpPreapprovalId?: string;
   }) {
     return await prisma.subscription.create({
       data,
@@ -78,24 +73,22 @@ export class SubscriptionRepository {
     });
   }
 
-  async update(subscriptionId: string, data: {
-    planId?: string;
-    status?: SubscriptionStatus;
-    currentPeriodStart?: Date;
-    currentPeriodEnd?: Date;
-    cancelledAt?: Date;
-    cancelAtPeriodEnd?: boolean;
-    cancellationReason?: string;
-    endedAt?: Date;
-    stripeSubscriptionId?: string;
-    stripePaymentMethodId?: string;
-  }) {
+  async update(subscriptionId: string, data: Partial<{
+    planId: string;
+    status: SubscriptionStatus;
+    currentPeriodStart: Date;
+    currentPeriodEnd: Date;
+    cancelledAt: Date | undefined;
+    cancelAtPeriodEnd: boolean;
+    cancellationReason: string | undefined;
+    endedAt: Date;
+    mpSubscriptionId: string;
+    mpPreapprovalId: string;
+  }>) {
     return await prisma.subscription.update({
       where: { id: subscriptionId },
       data,
-      include: {
-        plan: true
-      }
+      include: { plan: true }
     });
   }
 
@@ -128,9 +121,7 @@ export class SubscriptionRepository {
     return await prisma.subscription.findMany({
       where: {
         status: { in: [SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE] },
-        currentPeriodEnd: {
-          lt: new Date()
-        }
+        currentPeriodEnd: { lt: new Date() }
       },
       include: {
         user: true,

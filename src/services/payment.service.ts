@@ -5,9 +5,10 @@ import logger from '@/utils/logger';
 import prisma from '@/config/database';
 
 export class PaymentService {
-  
+
   /**
    * Crear pago con MercadoPago
+   * IMPORTANTE: Esto crea una preference (checkout), NO un pago directo
    */
   async createPayment(
     userId: string,
@@ -19,9 +20,9 @@ export class PaymentService {
     subscriptionId?: string
   ) {
     try {
-      // Crear pago en MercadoPago
-      const mpPayment = await mercadopagoService.createPayment({
-        id: Date.now(), // ID único basado en timestamp
+      // Crear preference en MercadoPago
+      const mpPreference = await mercadopagoService.createPayment({
+        id: Date.now(),
         amount,
         description,
         payerEmail: userEmail,
@@ -33,24 +34,30 @@ export class PaymentService {
         }
       });
 
-      // Crear registro en DB
+      // ⚠️ CAMBIO CRÍTICO: Guardar preference_id en metadata
+      // El payment_id real vendrá del webhook
       const payment = await paymentRepository.create({
         userId,
         paymentType,
         reservationId,
         subscriptionId,
         amount,
-        commissionAmount: 0, // Se calcula después
+        commissionAmount: 0,
         netAmount: amount,
         paymentMethod: 'mercadopago',
         status: PaymentStatus.PENDING,
-        transactionId: mpPayment.id
+        // NO guardamos transactionId aún porque no existe
+        // transactionId: null,
+        metadata: {
+          preferenceId: mpPreference.id, // Guardamos el preference_id aquí
+          externalReference: String(Date.now())
+        }
       });
 
-      return { 
-        payment, 
-        paymentUrl: mpPayment.init_point, // URL para que el usuario complete el pago
-        paymentId: mpPayment.id
+      return {
+        payment,
+        paymentUrl: mpPreference.init_point,
+        preferenceId: mpPreference.id
       };
     } catch (error) {
       logger.error('Error creating payment:', error);
@@ -60,37 +67,101 @@ export class PaymentService {
 
   /**
    * Confirmar pago (llamado desde webhook de MercadoPago)
+   * IMPORTANTE: Aquí sí recibimos el payment_id real
    */
-  async confirmPayment(transactionId: string) {
+  async confirmPayment(paymentId: string) {
     try {
       // Obtener info del pago desde MercadoPago
-      const mpPayment = await mercadopagoService.getPayment(transactionId);
+      const mpPayment = await mercadopagoService.getPayment(paymentId);
 
-      // Buscar payment por transactionId
-      const payment = await prisma.payment.findFirst({
-        where: { transactionId }
+      logger.info(`Processing MP payment ${paymentId}: status=${mpPayment.status}`);
+
+      // Buscar payment en DB por external_reference o metadata
+      let payment = await prisma.payment.findFirst({
+        where: {
+          OR: [
+            { transactionId: paymentId },
+            {
+              metadata: {
+                path: ['externalReference'],
+                equals: mpPayment.external_reference
+              }
+            }
+          ]
+        }
       });
 
+      // Si no encontramos el payment, buscar por preferenceId en metadata
+      if (!payment && mpPayment.metadata) {
+        const metadata = mpPayment.metadata as any;
+        if (metadata.reservationId) {
+          payment = await prisma.payment.findFirst({
+            where: {
+              reservationId: metadata.reservationId,
+              status: PaymentStatus.PENDING
+            },
+            orderBy: { createdAt: 'desc' }
+          });
+        }
+      }
+
       if (!payment) {
-        logger.warn(`Payment not found for transaction ${transactionId}`);
+        logger.warn(`Payment not found for MP payment ${paymentId}`);
         return null;
       }
 
-      // Actualizar status según el estado de MP
+      // Mapear status de MercadoPago a nuestro enum
       let status = PaymentStatus.PENDING;
 
       if (mpPayment.status === 'approved') {
         status = PaymentStatus.COMPLETED;
       } else if (mpPayment.status === 'rejected' || mpPayment.status === 'cancelled') {
         status = PaymentStatus.FAILED;
+      } else if (mpPayment.status === 'pending' || mpPayment.status === 'in_process') {
+        status = PaymentStatus.PENDING;
       }
 
+      // Actualizar payment con el payment_id real
       const updatedPayment = await paymentRepository.update(payment.id, {
         status,
-        completedAt: status === PaymentStatus.COMPLETED ? new Date() : undefined
+        transactionId: paymentId, // ✅ AHORA SÍ guardamos el payment_id real
+        completedAt: status === PaymentStatus.COMPLETED ? new Date() : undefined,
+        metadata: {
+          ...(payment.metadata as any || {}),
+          mpPaymentId: paymentId,
+          mpStatus: mpPayment.status,
+          mpStatusDetail: mpPayment.status_detail
+        }
       });
 
       logger.info(`Payment ${payment.id} updated to status: ${status}`);
+
+      // Si el pago fue aprobado, ejecutar acciones
+      if (status === PaymentStatus.COMPLETED) {
+
+        // Pago de reserva → confirmar reserva
+        if (payment.paymentType === PaymentType.RESERVATION && payment.reservationId) {
+          const { default: reservationService } = await import('@/services/reservation.service');
+          await reservationService.confirmReservation(payment.reservationId);
+          logger.info(`Reservation ${payment.reservationId} confirmed`);
+        }
+
+        // Pago de overtime → marcar OvertimeCharge como pagado
+        if (payment.paymentType === PaymentType.OVERTIME && payment.reservationId) {
+          await prisma.overtimeCharge.update({
+            where: { reservationId: payment.reservationId },
+            data: { isPaid: true, paidAt: new Date() }
+          });
+          logger.info(`OvertimeCharge marked as paid for reservation: ${payment.reservationId}`);
+        }
+
+        // Pago de suscripción → activar suscripción
+        if (payment.paymentType === PaymentType.SUBSCRIPTION && payment.subscriptionId) {
+          const { default: subscriptionService } = await import('@/services/subscription.service.mercadopago');
+          await subscriptionService.confirmSubscriptionPayment(payment.subscriptionId);
+          logger.info(`Subscription ${payment.subscriptionId} activated`);
+        }
+      }
 
       return updatedPayment;
     } catch (error) {
@@ -149,18 +220,15 @@ export class PaymentService {
         throw new Error('No se encontró el ID de transacción de MercadoPago');
       }
 
-      // Crear refund en MercadoPago
       const refund = await mercadopagoService.refundPayment(
         payment.transactionId,
         amount ? Number(amount) : undefined
       );
 
-      // Actualizar payment como refunded
       await paymentRepository.update(paymentId, {
         status: PaymentStatus.REFUNDED
       });
 
-      // Crear registro de refund
       await paymentRepository.create({
         userId: payment.userId,
         paymentType: PaymentType.REFUND,
@@ -170,7 +238,7 @@ export class PaymentService {
         netAmount: -(amount || Number(payment.amount)),
         paymentMethod: payment.paymentMethod,
         status: PaymentStatus.COMPLETED,
-        transactionId: refund.id?.toString(),
+        transactionId: refund.id?.toString()
       });
 
       logger.info(`Refund processed for payment ${paymentId}`);
@@ -197,11 +265,13 @@ export class PaymentService {
 
       await paymentRepository.update(payment.id, {
         status: PaymentStatus.FAILED,
-        metadata: { failureReason: reason }
+        metadata: { 
+          ...(payment.metadata as any),
+          failureReason: reason 
+        }
       });
 
       logger.info(`Payment ${payment.id} marked as failed: ${reason}`);
-
       return payment;
     } catch (error) {
       logger.error('Error marking payment as failed:', error);

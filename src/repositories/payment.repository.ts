@@ -52,6 +52,7 @@ export class PaymentRepository {
     paymentIntentId?: string;
     transactionId?: string;
     metadata?: any;
+    completedAt?: Date; // ✅ AGREGADO
   }) {
     return await prisma.payment.create({
       data

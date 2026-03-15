@@ -14,6 +14,7 @@ export class ParkingController {
       const lat = parseFloat(latitude as string);
       const lng = parseFloat(longitude as string);
       const rad = parseInt(radius as string, 10);
+      
 
       const parkings = await parkingService.getNearby(lat, lng, rad);
 

@@ -3,7 +3,6 @@ import parkingRepository from '@/repositories/parking.repository';
 import { ParkingStatus } from '@/types/enums';
 import logger from '@/utils/logger';
 import { calculateDistance } from '@/utils/helpers';
-import { IParkingLot } from '@/types/interfaces';
 
 // Definir tipo extendido al inicio del archivo
 type ParkingFromRepo = Awaited<ReturnType<typeof parkingRepository.findActive>>[0];

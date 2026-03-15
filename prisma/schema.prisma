@@ -100,7 +100,7 @@ model Subscription {
   id                     String    @id @default(cuid())
   userId                 String    @unique
   planId                 String
-  status                 String    // trial | active | past_due | cancelled | expired
+  status                 String
   startDate              DateTime
   trialStartDate         DateTime?
   trialEndDate           DateTime?
@@ -110,13 +110,11 @@ model Subscription {
   cancelAtPeriodEnd      Boolean   @default(false)
   endedAt                DateTime?
   cancellationReason     String?
-  stripeCustomerId       String?
-  stripeSubscriptionId   String?
-  stripePaymentMethodId  String?
+  mpSubscriptionId       String?
+  mpPreapprovalId        String?
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
-  // Relations
   user         User               @relation(fields: [userId], references: [id])
   plan         SubscriptionPlan   @relation(fields: [planId], references: [id])
   parkingLots  ParkingLot[]
@@ -134,10 +132,10 @@ model Subscription {
 model SubscriptionInvoice {
   id             String    @id @default(cuid())
   subscriptionId String
-  stripeInvoiceId String?
+  mpPaymentId    String?   // reemplaza stripeInvoiceId
   amount         Decimal   @db.Decimal(10, 2)
   tax            Decimal   @default(0) @db.Decimal(10, 2)
-  status         String    // pending | completed | failed
+  status         String
   paidAt         DateTime?
   dueDate        DateTime?
   periodStart    DateTime?
@@ -145,7 +143,6 @@ model SubscriptionInvoice {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  // Relations
   subscription   Subscription @relation(fields: [subscriptionId], references: [id])
 
   @@map("subscription_invoices")

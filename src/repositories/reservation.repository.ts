@@ -2,7 +2,7 @@ import prisma from '@/config/database';
 import { ReservationStatus } from '@/types/enums';
 
 export class ReservationRepository {
-  
+
   async findById(id: string) {
     return await prisma.reservation.findUnique({
       where: { id },
@@ -102,13 +102,37 @@ export class ReservationRepository {
     });
   }
 
-  async create(data: any) {
-    return await prisma.reservation.create({
-      data
-    });
+  async create(data: {
+    reservationCode: string;
+    userId: string;
+    parkingLotId: string;
+    vehicleId?: string;
+    startTime: Date;
+    endTime: Date;
+    reservedHours: number;
+    baseCost: number;
+    overtimeCost?: number;
+    totalCost: number;
+    commissionRate: number;
+    commissionAmount: number;
+    notes?: string;
+    status: ReservationStatus;
+  }) {
+    return await prisma.reservation.create({ data });
   }
 
-  async update(id: string, data: any) {
+  async update(id: string, data: Partial<{
+    status: ReservationStatus;
+    parkingSpotId: string;
+    checkInTime: Date;
+    actualExitTime: Date;
+    overtimeHours: number;
+    overtimeCost: number;
+    totalCost: number;
+    completedAt: Date;
+    cancelledAt: Date;
+    cancellationReason: string;
+  }>) {
     return await prisma.reservation.update({
       where: { id },
       data
@@ -130,7 +154,7 @@ export class ReservationRepository {
 
   async findUpcomingReservationsForReminder(minutesBefore: number) {
     const targetTime = new Date(Date.now() + minutesBefore * 60 * 1000);
-    const buffer = 5 * 60 * 1000; // 5 minutos de buffer
+    const buffer = 5 * 60 * 1000;
 
     return await prisma.reservation.findMany({
       where: {

@@ -4,12 +4,12 @@ import parkingRepository from '@/repositories/parking.repository';
 import paymentRepository from '@/repositories/payment.repository';
 import notificationService from '@/services/notification.service';
 import { ReservationStatus, PaymentType, PaymentStatus } from '@/types/enums';
-import { calculateHoursBetween, calculateCost, calculateCommission } from '@/utils/helpers';
+import { calculateHoursBetween, calculateCost, calculateCommission, generateReservationCode } from '@/utils/helpers';
 import mercadopagoService from '@/integrations/mercadopago.client';
 import logger from '@/utils/logger';
 
 export class ReservationService {
-  
+
   /**
    * Crear reserva
    */
@@ -21,25 +21,21 @@ export class ReservationService {
     notes?: string;
   }) {
     try {
-      // Obtener estacionamiento y plan
       const parking = await parkingRepository.findById(data.parkingLotId);
-      if (!parking) {
-        throw new Error('Estacionamiento no encontrado');
-      }
+      if (!parking) throw new Error('Estacionamiento no encontrado');
 
       const subscription = await prisma.subscription.findUnique({
         where: { id: parking.subscriptionId! },
         include: { plan: true }
       });
 
-      // Calcular costos
       const hours = calculateHoursBetween(data.startTime, data.endTime);
       const baseCost = calculateCost(hours, Number(parking.basePricePerHour));
-      const commissionRate = subscription?.plan.commissionRate || 15;
-      const commissionAmount = calculateCommission(baseCost, Number(commissionRate));
+      const commissionRate = Number(subscription?.plan.commissionRate ?? 15);
+      const commissionAmount = calculateCommission(baseCost, commissionRate);
 
-      // Crear reserva
       const reservation = await reservationRepository.create({
+        reservationCode: generateReservationCode(),
         userId,
         parkingLotId: data.parkingLotId,
         vehicleId: data.vehicleId,
@@ -47,6 +43,7 @@ export class ReservationService {
         endTime: data.endTime,
         reservedHours: hours,
         baseCost,
+        overtimeCost: 0,
         totalCost: baseCost,
         commissionRate,
         commissionAmount,
@@ -68,20 +65,11 @@ export class ReservationService {
   async processPayment(reservationId: string) {
     try {
       const reservation = await reservationRepository.findById(reservationId);
-      if (!reservation) {
-        throw new Error('Reserva no encontrada');
-      }
+      if (!reservation) throw new Error('Reserva no encontrada');
 
-      // Obtener usuario
-      const user = await prisma.user.findUnique({
-        where: { id: reservation.userId }
-      });
+      const user = await prisma.user.findUnique({ where: { id: reservation.userId } });
+      if (!user) throw new Error('Usuario no encontrado');
 
-      if (!user) {
-        throw new Error('Usuario no encontrado');
-      }
-
-      // Crear pago en MercadoPago
       const mpPayment = await mercadopagoService.createPayment({
         id: Date.now(),
         amount: Number(reservation.totalCost),
@@ -94,7 +82,6 @@ export class ReservationService {
         }
       });
 
-      // Crear registro de pago
       const payment = await paymentRepository.create({
         userId: reservation.userId,
         paymentType: PaymentType.RESERVATION,
@@ -107,10 +94,10 @@ export class ReservationService {
         transactionId: mpPayment.id
       });
 
-      return { 
-        reservation, 
-        payment, 
-        paymentUrl: mpPayment.init_point, // URL para completar el pago
+      return {
+        reservation,
+        payment,
+        paymentUrl: mpPayment.init_point,
         paymentId: mpPayment.id
       };
     } catch (error: any) {
@@ -128,15 +115,10 @@ export class ReservationService {
         status: ReservationStatus.CONFIRMED
       });
 
-      // Decrementar espacios disponibles
       await parkingRepository.updateAvailableSpots(reservation.parkingLotId, -1);
 
-      // Asignar espacio si disponible
       const availableSpot = await prisma.parkingSpot.findFirst({
-        where: {
-          parkingLotId: reservation.parkingLotId,
-          status: 'available'
-        }
+        where: { parkingLotId: reservation.parkingLotId, status: 'available' }
       });
 
       if (availableSpot) {
@@ -150,10 +132,8 @@ export class ReservationService {
         });
       }
 
-      // Obtener información del estacionamiento
       const parking = await parkingRepository.findById(reservation.parkingLotId);
 
-      // Enviar notificación
       await notificationService.sendReservationConfirmed(
         reservation.userId,
         reservation.id,
@@ -193,17 +173,26 @@ export class ReservationService {
    */
   async checkOut(reservationId: string) {
     const reservation = await reservationRepository.findById(reservationId);
-    if (!reservation) {
-      throw new Error('Reserva no encontrada');
-    }
+    if (!reservation) throw new Error('Reserva no encontrada');
 
     const now = new Date();
     const overtimeHours = calculateHoursBetween(reservation.endTime, now);
 
     let overtimeCost = 0;
+
     if (overtimeHours > 0) {
       const parking = await parkingRepository.findById(reservation.parkingLotId);
       overtimeCost = calculateCost(overtimeHours, Number(parking!.overtimeRatePerHour));
+
+      await prisma.overtimeCharge.create({
+        data: {
+          reservationId,
+          hoursOvertime: overtimeHours,
+          ratePerHour: parking!.overtimeRatePerHour,
+          totalCharge: overtimeCost,
+          isPaid: false
+        }
+      });
     }
 
     const updated = await reservationRepository.update(reservationId, {
@@ -215,7 +204,6 @@ export class ReservationService {
       completedAt: now
     });
 
-    // Liberar espacio
     if (reservation.parkingSpotId) {
       await prisma.parkingSpot.update({
         where: { id: reservation.parkingSpotId },
@@ -225,8 +213,62 @@ export class ReservationService {
 
     await parkingRepository.updateAvailableSpots(reservation.parkingLotId, 1);
 
+    if (overtimeCost > 0) {
+      await notificationService.sendOvertimeCharged(
+        reservation.userId,
+        reservationId,
+        overtimeCost,
+        overtimeHours
+      );
+    }
+
     logger.info(`Check-out completed for reservation: ${reservationId}`);
     return updated;
+  }
+
+  /**
+   * Pagar overtime
+   */
+  async payOvertime(reservationId: string, userEmail: string) {
+    const overtimeCharge = await prisma.overtimeCharge.findUnique({
+      where: { reservationId }
+    });
+
+    if (!overtimeCharge) throw new Error('No hay cargo de overtime para esta reserva');
+    if (overtimeCharge.isPaid) throw new Error('El overtime ya fue pagado');
+
+    const reservation = await reservationRepository.findById(reservationId);
+    if (!reservation) throw new Error('Reserva no encontrada');
+
+    const mpPayment = await mercadopagoService.createPayment({
+      id: Date.now(),
+      amount: Number(overtimeCharge.totalCharge),
+      description: `Tiempo extra - Reserva ${reservation.reservationCode}`,
+      payerEmail: userEmail,
+      metadata: {
+        reservationId,
+        userId: reservation.userId,
+        type: 'overtime'
+      }
+    });
+
+    const payment = await paymentRepository.create({
+      userId: reservation.userId,
+      paymentType: PaymentType.OVERTIME,
+      reservationId,
+      amount: Number(overtimeCharge.totalCharge),
+      commissionAmount: 0,
+      netAmount: Number(overtimeCharge.totalCharge),
+      paymentMethod: 'mercadopago',
+      status: PaymentStatus.PENDING,
+      transactionId: mpPayment.id
+    });
+
+    return {
+      payment,
+      paymentUrl: mpPayment.init_point,
+      overtimeCharge
+    };
   }
 
   /**
@@ -234,9 +276,7 @@ export class ReservationService {
    */
   async cancel(reservationId: string, userId: string, reason?: string) {
     const reservation = await reservationRepository.findById(reservationId);
-    if (!reservation) {
-      throw new Error('Reserva no encontrada');
-    }
+    if (!reservation) throw new Error('Reserva no encontrada');
 
     if (reservation.userId !== userId) {
       throw new Error('No tienes permiso para cancelar esta reserva');
@@ -252,7 +292,6 @@ export class ReservationService {
       cancellationReason: reason
     });
 
-    // Liberar espacio si estaba asignado
     if (reservation.parkingSpotId) {
       await prisma.parkingSpot.update({
         where: { id: reservation.parkingSpotId },
@@ -262,27 +301,17 @@ export class ReservationService {
       await parkingRepository.updateAvailableSpots(reservation.parkingLotId, 1);
     }
 
-    // Si había pago completado, procesar reembolso
     const payment = await prisma.payment.findFirst({
-      where: {
-        reservationId,
-        status: PaymentStatus.COMPLETED
-      }
+      where: { reservationId, status: PaymentStatus.COMPLETED }
     });
 
-    if (payment && payment.transactionId) {
-      // Solicitar reembolso en MercadoPago
+    if (payment?.transactionId) {
       try {
         await mercadopagoService.refundPayment(payment.transactionId);
-        
-        await paymentRepository.update(payment.id, {
-          status: PaymentStatus.REFUNDED
-        });
-
+        await paymentRepository.update(payment.id, { status: PaymentStatus.REFUNDED });
         logger.info(`Refund processed for reservation: ${reservationId}`);
       } catch (error) {
         logger.error('Error processing refund:', error);
-        // Continuar con la cancelación aunque falle el reembolso
       }
     }
 
@@ -316,35 +345,16 @@ export class ReservationService {
    */
   async checkAvailability(parkingLotId: string, startTime: Date, endTime: Date) {
     const parking = await parkingRepository.findById(parkingLotId);
+    if (!parking) throw new Error('Estacionamiento no encontrado');
 
-    if (!parking) {
-      throw new Error('Estacionamiento no encontrado');
-    }
-
-    // Contar reservas que se solapan con el período solicitado
     const overlappingReservations = await prisma.reservation.count({
       where: {
         parkingLotId,
         status: { in: [ReservationStatus.CONFIRMED, ReservationStatus.ACTIVE] },
         OR: [
-          {
-            AND: [
-              { startTime: { lte: startTime } },
-              { endTime: { gt: startTime } }
-            ]
-          },
-          {
-            AND: [
-              { startTime: { lt: endTime } },
-              { endTime: { gte: endTime } }
-            ]
-          },
-          {
-            AND: [
-              { startTime: { gte: startTime } },
-              { endTime: { lte: endTime } }
-            ]
-          }
+          { AND: [{ startTime: { lte: startTime } }, { endTime: { gt: startTime } }] },
+          { AND: [{ startTime: { lt: endTime } }, { endTime: { gte: endTime } }] },
+          { AND: [{ startTime: { gte: startTime } }, { endTime: { lte: endTime } }] }
         ]
       }
     });

@@ -39,8 +39,8 @@ export const createParkingSchema = z.object({
 });
 
 export const createReservationSchema = z.object({
-  parkingLotId: z.string().uuid(),
-  vehicleId: z.string().uuid().optional(),
+  parkingLotId: z.string().cuid(),  // ✅ CAMBIO: uuid() → cuid()
+  vehicleId: z.string().cuid().optional(),  // ✅ CAMBIO: uuid() → cuid()
   startTime: z.string().datetime(),
   endTime: z.string().datetime(),
   notes: z.string().optional()
@@ -50,9 +50,9 @@ export const createReservationSchema = z.object({
 );
 
 export const nearbyParkingSchema = z.object({
-  latitude: z.number().min(-90).max(90),
-  longitude: z.number().min(-180).max(180),
-  radius: z.number().positive().optional().default(5000),
+  latitude: z.string().transform(val => parseFloat(val)).pipe(z.number().min(-90).max(90)),
+  longitude: z.string().transform(val => parseFloat(val)).pipe(z.number().min(-180).max(180)),
+  radius: z.string().optional().transform(val => val ? parseInt(val, 10) : 5000).pipe(z.number().positive()),
   startTime: z.string().datetime().optional(),
   endTime: z.string().datetime().optional()
 });
