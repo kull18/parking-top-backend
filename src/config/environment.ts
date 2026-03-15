@@ -10,7 +10,8 @@ export const config = {
     port: parseInt(process.env.PORT || '3000', 10),
     apiVersion: process.env.API_VERSION || 'v1',
     name: process.env.APP_NAME || 'Parking Top',
-    apiUrl: process.env.API_URL || 'http://localhost:3000'
+    apiUrl: process.env.API_URL || 'http://localhost:3000',
+    enableCronJobs: process.env.ENABLE_CRON_JOBS === 'true' || process.env.NODE_ENV === 'production'
   },
 
   database: {

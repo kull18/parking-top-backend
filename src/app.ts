@@ -8,6 +8,7 @@ import { errorHandler, notFound } from '@/middlewares/error.middleware';
 import { generalLimiter } from '@/middlewares/rate-limit.middleware';
 import routes from '@/routes';
 import mercadopagoWebhook from '@/webhooks/mercadopago.webhook';
+import logger from './utils/logger';
 
 const app: Application = express();
 
@@ -40,6 +41,13 @@ app.get('/health', (_, res) => {
 });
 app.use('/webhooks/mercadopago', mercadopagoWebhook);
 app.use(`/${config.app.apiVersion}`, routes);
+
+
+if (config.app.env === 'development') {
+  const testRoutes = require('./routes/test.routes').default;
+  app.use('/test', testRoutes);
+  logger.info('Test routes enabled (development mode)');
+}
 
 app.use(notFound);
 app.use(errorHandler);
