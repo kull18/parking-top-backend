@@ -3,7 +3,9 @@ import { config, validateConfig } from '@/config/environment';
 import prisma from '@/config/database';
 import redis from '@/config/redis';
 import logger from '@/utils/logger';
-import { startSubscriptionJobs, stopSubscriptionJobs } from '@/jobs/check-subscriptions.job';
+
+// ✅ IMPORTAR TODOS LOS CRON JOBS
+import { startAllJobs, stopAllJobs } from '@/jobs';
 
 try {
   validateConfig();
@@ -19,9 +21,9 @@ const server = app.listen(config.app.port, () => {
   logger.info(`Database connected`);
   logger.info(`Redis connected`);
   
-  if (config.app.env === 'production') {
-    startSubscriptionJobs();
-    logger.info('Cron jobs started');
+  // ✅ INICIAR TODOS LOS CRON JOBS
+  if (config.app.env === 'production' || config.app.enableCronJobs) {
+    startAllJobs();
   } else {
     logger.info('Cron jobs disabled in development');
   }
@@ -33,8 +35,8 @@ const gracefulShutdown = async (): Promise<void> => {
   server.close(async () => {
     logger.info('HTTP server closed');
     
-    stopSubscriptionJobs();
-    logger.info('Cron jobs stopped');
+    // ✅ DETENER TODOS LOS CRON JOBS
+    stopAllJobs();
     
     await prisma.$disconnect();
     logger.info('Database disconnected');
@@ -63,4 +65,4 @@ process.on('uncaughtException', (error: Error) => {
   gracefulShutdown();
 });
 
-export default server;  
+export default server;
