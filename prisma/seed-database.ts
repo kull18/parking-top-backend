@@ -6,7 +6,6 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Seeding database...');
 
-  // Limpiar datos existentes (CUIDADO en producción)
   if (process.env.NODE_ENV === 'development') {
     console.log('🗑️  Clearing existing data...');
     await prisma.review.deleteMany();
@@ -31,14 +30,13 @@ async function main() {
       name: 'basic',
       displayName: 'Plan Básico',
       description: 'Ideal para empezar',
-      monthlyPrice: 499,
+      monthlyPrice: 300,
       setupFee: 0,
       maxParkingLots: 1,
       maxSpotsPerLot: 50,
       commissionRate: 15,
       features: ['basic_analytics', 'email_support'],
-      trialDays: 7,
-      stripePriceId: 'price_basic_test'
+      trialDays: 7
     }
   });
 
@@ -47,14 +45,13 @@ async function main() {
       name: 'premium',
       displayName: 'Plan Premium',
       description: 'Para múltiples estacionamientos',
-      monthlyPrice: 999,
+      monthlyPrice: 600,
       setupFee: 0,
       maxParkingLots: 5,
       maxSpotsPerLot: null,
       commissionRate: 12,
       features: ['advanced_analytics', 'priority_support'],
-      trialDays: 14,
-      stripePriceId: 'price_premium_test'
+      trialDays: 14
     }
   });
 
@@ -63,14 +60,13 @@ async function main() {
       name: 'enterprise',
       displayName: 'Plan Empresarial',
       description: 'Solución completa',
-      monthlyPrice: 2499,
+      monthlyPrice: 900,
       setupFee: 500,
       maxParkingLots: null,
       maxSpotsPerLot: null,
       commissionRate: 10,
       features: ['advanced_analytics', '24_7_support', 'api_access'],
-      trialDays: 30,
-      stripePriceId: 'price_enterprise_test'
+      trialDays: 30
     }
   });
 
@@ -123,8 +119,7 @@ async function main() {
       startDate: new Date(),
       currentPeriodStart: new Date(),
       currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      stripeCustomerId: 'cus_test_123',
-      stripeSubscriptionId: 'sub_test_123'
+      mpSubscriptionId: 'mp_sub_test_123'
     }
   });
 
@@ -176,7 +171,7 @@ async function main() {
   await prisma.parkingSpot.createMany({ data: spots });
 
   // 6. Crear vehículo de prueba
-  console.log('Creating test vehicle...');
+  console.log('🚗 Creating test vehicle...');
   await prisma.vehicle.create({
     data: {
       userId: customer1.id,
@@ -195,10 +190,10 @@ async function main() {
   console.log(`- Users: 3 (1 customer, 1 owner, 1 admin)`);
   console.log(`- Subscriptions: 1 (active)`);
   console.log(`- Parking lots: 1 (30 spots)`);
-  console.log(`\n🔑 Test credentials:`);
-  console.log(`Customer: cliente@test.com / password123`);
-  console.log(`Owner: propietario@test.com / password123`);
-  console.log(`Admin: admin@parkingtop.com / password123`);
+  console.log('\n🔑 Test credentials:');
+  console.log('Customer: cliente@test.com / password123');
+  console.log('Owner: propietario@test.com / password123');
+  console.log('Admin: admin@parkingtop.com / password123');
 }
 
 main()

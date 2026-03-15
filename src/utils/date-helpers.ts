@@ -80,3 +80,10 @@ export function isThisWeek(date: Date): boolean {
 export function isThisMonth(date: Date): boolean {
   return dayjs(date).isSame(dayjs(), 'month');
 }
+
+// utils/helpers.ts
+export const generateReservationCode = (): string => {
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+  return `PKT-${date}-${random}`;
+};

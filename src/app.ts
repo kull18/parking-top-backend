@@ -7,8 +7,11 @@ import { config } from '@/config/environment';
 import { errorHandler, notFound } from '@/middlewares/error.middleware';
 import { generalLimiter } from '@/middlewares/rate-limit.middleware';
 import routes from '@/routes';
+import mercadopagoWebhook from '@/webhooks/mercadopago.webhook';
 
 const app: Application = express();
+
+app.set('trust proxy', 1); // Si estás detrás de un proxy (ej. Heroku) para obtener IP real en rate limiting y logs
 
 app.use(helmet());
 app.use(cors({
@@ -35,7 +38,7 @@ app.get('/health', (_, res) => {
     version: '1.0.0'
   });
 });
-
+app.use('/webhooks/mercadopago', mercadopagoWebhook);
 app.use(`/${config.app.apiVersion}`, routes);
 
 app.use(notFound);

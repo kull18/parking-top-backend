@@ -98,7 +98,7 @@ export class SubscriptionService {
         trialEndDate,
         currentPeriodStart: now,
         currentPeriodEnd,
-        stripeSubscriptionId: mpSubscription.id // Guardamos el ID de MP aquí
+        mpSubscriptionId: mpSubscription.id
       });
 
       logger.info(`Subscription created for user ${userId}: ${subscription.id}`);

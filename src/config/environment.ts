@@ -41,7 +41,8 @@ export const config = {
 
   mercadopago: {
     accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN || '',
-    publicKey: process.env.MERCADOPAGO_PUBLIC_KEY || ''
+    publicKey: process.env.MERCADOPAGO_PUBLIC_KEY || '',
+    webhookSecret: process.env.MERCADOPAGO_WEBHOOK_SECRET ?? ''
   },
 
   firebase: {

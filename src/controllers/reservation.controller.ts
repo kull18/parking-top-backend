@@ -26,6 +26,18 @@ export class ReservationController {
     }
   }
 
+  async payOvertime(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { id } = req.params;
+    const userEmail = req.user!.email;
+
+    const result = await reservationService.payOvertime(id, userEmail);
+    sendSuccess(res, result, 201);
+  } catch (error) {
+    next(error);
+  }
+}
+
   async processPayment(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const { reservationId } = req.params;
