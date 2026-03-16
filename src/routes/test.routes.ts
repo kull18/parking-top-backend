@@ -155,6 +155,40 @@ if (process.env.NODE_ENV === 'development') {
     }
   });
 
+
+  /**
+ * POST /test/complete-reservation/:reservationId
+ * Completar reserva manualmente (testing)
+ */
+router.post('/complete-reservation/:reservationId', async (req: Request, res: Response) => {
+  try {
+    const { reservationId } = req.params;
+
+    const reservation = await prisma.reservation.update({
+      where: { id: reservationId },
+      data: {
+        status: ReservationStatus.COMPLETED,
+        checkInTime: new Date(Date.now() - 4 * 60 * 60 * 1000), // 4 horas atrás
+        actualExitTime: new Date(),
+        completedAt: new Date()
+      }
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        message: '✅ Reserva completada manualmente (TEST MODE)',
+        reservation
+      }
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      error: { message: error.message }
+    });
+  }
+});
+
   /**
    * Rechazar pago manualmente (testing)
    * POST /test/reject-payment/:reservationId
@@ -228,6 +262,8 @@ if (process.env.NODE_ENV === 'development') {
         }
       });
     }
+
+    
   });
 
   logger.info('✅ Test routes enabled (development mode)');
