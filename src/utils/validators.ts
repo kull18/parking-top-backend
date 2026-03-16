@@ -56,3 +56,22 @@ export const nearbyParkingSchema = z.object({
   startTime: z.string().datetime().optional(),
   endTime: z.string().datetime().optional()
 });
+
+export const createReviewSchema = z.object({
+  parkingLotId: z.string().cuid(),
+  reservationId: z.string().cuid(),
+  rating: z.number().int().min(1).max(5),
+  comment: z.string().min(10).max(500).optional()
+});
+ 
+export const respondReviewSchema = z.object({
+  response: z.string().min(10).max(500)
+});
+ 
+export const updateReviewSchema = z.object({
+  rating: z.number().int().min(1).max(5).optional(),
+  comment: z.string().min(10).max(500).optional()
+}).refine(
+  (data) => data.rating !== undefined || data.comment !== undefined,
+  { message: 'Debes proporcionar al menos rating o comment' }
+);

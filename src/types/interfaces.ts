@@ -37,10 +37,12 @@ export interface IUserResponse {
   createdAt: Date;
 }
 
+// src/types/interfaces.ts
 export interface IAuthTokenPayload {
   userId: string;
   email: string;
   role: UserRole;
+  fullName: string;
 }
 
 export interface IAuthResponse {

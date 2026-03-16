@@ -171,9 +171,9 @@ export class AuthService {
     logger.info(`Password changed for user: ${userId}`);
   }
 
-  generateTokens(user: { id: string; email: string; role: string }) {
+  generateTokens(user: { id: string; email: string; role: string, fullName: string }) {
     const token = jwt.sign(
-      { userId: user.id, email: user.email, role: user.role },
+      { userId: user.id, email: user.email, role: user.role, fullName: user.fullName },
       config.jwt.secret,
       { expiresIn: config.jwt.expiresIn } as any
     );
@@ -201,7 +201,7 @@ export class AuthService {
     }
 
     const newToken = jwt.sign(
-      { userId: user.id, email: user.email, role: user.role },
+      { userId: user.id, email: user.email, role: user.role, fullName: user.fullName },
       config.jwt.secret,
       { expiresIn: config.jwt.expiresIn } as any
     );
