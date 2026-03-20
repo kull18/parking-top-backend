@@ -67,6 +67,17 @@ export const createReviewSchema = z.object({
 export const respondReviewSchema = z.object({
   response: z.string().min(10).max(500)
 });
+
+export const registerFCMTokenSchema = z.object({
+  token: z.string().min(10),
+  platform: z.enum(['android', 'ios', 'web'])
+});
+ 
+export const removeFCMTokenSchema = z.object({
+  token: z.string().min(10)
+});
+ 
+ 
  
 export const updateReviewSchema = z.object({
   rating: z.number().int().min(1).max(5).optional(),

@@ -1,61 +1,63 @@
+// src/repositories/notification.repository.ts
 import prisma from '@/config/database';
 import { NotificationType } from '@/types/enums';
 
 export class NotificationRepository {
-  
+
+  /**
+   * Buscar notificación por ID
+   */
   async findById(id: string) {
     return await prisma.notification.findUnique({
       where: { id }
     });
   }
 
-  async findByUserId(
-    userId: string,
-    options?: {
-      unreadOnly?: boolean;
-      limit?: number;
+  /**
+   * Buscar notificaciones del usuario
+   */
+  async findByUser(userId: string, skip: number, take: number, isRead?: boolean) {
+    const where: any = { userId };
+    
+    if (isRead !== undefined) {
+      where.isRead = isRead;
     }
-  ) {
-    return await prisma.notification.findMany({
-      where: {
-        userId,
-        ...(options?.unreadOnly && { isRead: false })
-      },
-      orderBy: { createdAt: 'desc' },
-      take: options?.limit || 50
-    });
+
+    return await Promise.all([
+      prisma.notification.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take
+      }),
+      prisma.notification.count({ where })
+    ]);
   }
 
+  /**
+   * Crear notificación
+   */
   async create(data: {
     userId: string;
     type: NotificationType;
     title: string;
     message: string;
     reservationId?: string;
-    subscriptionId?: string;
-    data?: any;
-    isRead?: boolean;
-    isSent?: boolean;
   }) {
     return await prisma.notification.create({
       data: {
         ...data,
-        isRead: data.isRead ?? false,
-        isSent: data.isSent ?? false
+        isRead: false
       }
     });
   }
 
-  async update(id: string, data: any) {
+  /**
+   * Marcar como leída
+   */
+  async markAsRead(id: string) {
     return await prisma.notification.update({
       where: { id },
-      data
-    });
-  }
-
-  async markAsRead(notificationId: string) {
-    return await prisma.notification.update({
-      where: { id: notificationId },
       data: {
         isRead: true,
         readAt: new Date()
@@ -63,8 +65,11 @@ export class NotificationRepository {
     });
   }
 
-  async markAllAsRead(userId: string) {
-    return await prisma.notification.updateMany({
+  /**
+   * Marcar todas como leídas
+   */
+  async markAllAsRead(userId: string): Promise<number> {
+    const result = await prisma.notification.updateMany({
       where: {
         userId,
         isRead: false
@@ -74,9 +79,14 @@ export class NotificationRepository {
         readAt: new Date()
       }
     });
+
+    return result.count;
   }
 
-  async countUnread(userId: string) {
+  /**
+   * Contar no leídas
+   */
+  async countUnread(userId: string): Promise<number> {
     return await prisma.notification.count({
       where: {
         userId,
@@ -85,62 +95,12 @@ export class NotificationRepository {
     });
   }
 
-  async deleteOldNotifications(olderThan: Date) {
-    return await prisma.notification.deleteMany({
-      where: {
-        isRead: true,
-        readAt: { lt: olderThan }
-      }
-    });
-  }
-
-  async findPendingToSend() {
-    return await prisma.notification.findMany({
-      where: {
-        isSent: false
-      },
-      take: 100
-    });
-  }
-
-  async findByType(userId: string, type: NotificationType) {
-    return await prisma.notification.findMany({
-      where: {
-        userId,
-        type
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-  }
-
-  async findByReservationId(reservationId: string) {
-    return await prisma.notification.findMany({
-      where: { reservationId },
-      orderBy: { createdAt: 'desc' }
-    });
-  }
-
-  async findBySubscriptionId(subscriptionId: string) {
-    return await prisma.notification.findMany({
-      where: { subscriptionId },
-      orderBy: { createdAt: 'desc' }
-    });
-  }
-
-  async bulkCreate(notifications: Array<{
-    userId: string;
-    type: NotificationType;
-    title: string;
-    message: string;
-    reservationId?: string;
-    subscriptionId?: string;
-  }>) {
-    return await prisma.notification.createMany({
-      data: notifications.map(n => ({
-        ...n,
-        isRead: false,
-        isSent: false
-      }))
+  /**
+   * Eliminar notificación
+   */
+  async delete(id: string) {
+    return await prisma.notification.delete({
+      where: { id }
     });
   }
 }

@@ -47,11 +47,10 @@ export const config = {
   },
 
   firebase: {
-    projectId: process.env.FCM_PROJECT_ID || '',
-    privateKey: process.env.FCM_PRIVATE_KEY?.replace(/\\n/g, '\n') || '',
-    clientEmail: process.env.FCM_CLIENT_EMAIL || '',
-    databaseUrl: process.env.FCM_DATABASE_URL || ''
-  },
+  projectId: process.env.FIREBASE_PROJECT_ID,
+  privateKey: process.env.FIREBASE_PRIVATE_KEY,
+  clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+},
 
 cloudinary: {
   cloudName: process.env.CLOUDINARY_CLOUD_NAME || '',

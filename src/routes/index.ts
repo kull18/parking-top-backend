@@ -6,6 +6,8 @@ import parkingRoutes from './parking.routes';
 import reservationRoutes from './reservation.routes';
 import paymentRoutes from './payment.routes';
 import reviewRoutes from './review.routes';
+import notificationRoutes from './notification.routes';
+import dashboardRoutes from './dashboard.routes';
 
 const router = Router();
 
@@ -17,5 +19,7 @@ router.use('/parkings', parkingRoutes);
 router.use('/reservations', reservationRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/reviews', reviewRoutes);
+router.use('/notifications', notificationRoutes);
+router.use('/dashboard', dashboardRoutes);
 
 export default router;
