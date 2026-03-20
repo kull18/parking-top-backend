@@ -9,8 +9,7 @@ if (config.firebase.projectId && config.firebase.privateKey && config.firebase.c
       projectId: config.firebase.projectId,
       privateKey: config.firebase.privateKey,
       clientEmail: config.firebase.clientEmail
-    }),
-    databaseURL: config.firebase.databaseUrl
+    })
   });
 } else {
   logger.warn('Firebase credentials not configured');

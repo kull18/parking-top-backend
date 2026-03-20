@@ -1,243 +1,180 @@
+// src/services/notification.service.ts
 import notificationRepository from '@/repositories/notification.repository';
+import pushTokenRepository from '@/repositories/push-token.repository';
 import firebaseService from '@/integrations/firebase.client';
 import { NotificationType } from '@/types/enums';
 import logger from '@/utils/logger';
 
 export class NotificationService {
 
-  async create(data: {
-    userId: string;
-    type: NotificationType;
-    title: string;
-    message: string;
-    reservationId?: string;
-    subscriptionId?: string;
-    data?: any;
-  }) {
-    try {
-      const notification = await notificationRepository.create(data);
-
-      // Intentar enviar push notification
-      try {
-        await firebaseService.sendToUser(data.userId, {
-          title: data.title,
-          body: data.message,
-          data: {
-            notificationId: notification.id,
-            type: data.type,
-            ...(data.reservationId && { reservationId: data.reservationId }),
-            ...(data.subscriptionId && { subscriptionId: data.subscriptionId })
-          }
-        });
-
-        await notificationRepository.update(notification.id, {
-          isSent: true,
-          sentAt: new Date()
-        });
-      } catch (pushError) {
-        logger.error('Error sending push notification:', pushError);
-      }
-
-      return notification;
-    } catch (error) {
-      logger.error('Error creating notification:', error);
-      throw error;
-    }
-  }
-
   /**
    * Obtener notificaciones del usuario
    */
-  async getUserNotifications(userId: string, unreadOnly: boolean = false) {
-    const notifications = await notificationRepository.findByUserId(
+  async getUserNotifications(
+    userId: string,
+    page: number = 1,
+    perPage: number = 20,
+    isRead?: boolean
+  ) {
+    const skip = (page - 1) * perPage;
+    const [notifications, total] = await notificationRepository.findByUser(
       userId,
-      { unreadOnly }
+      skip,
+      perPage,
+      isRead
     );
-    const unreadCount = await notificationRepository.countUnread(userId);
 
     return {
       notifications,
-      unreadCount
+      pagination: {
+        page,
+        perPage,
+        total,
+        totalPages: Math.ceil(total / perPage)
+      }
     };
   }
 
   /**
    * Marcar notificación como leída
    */
-  async markAsRead(userId: string, notificationId: string) {
-    const notification = await notificationRepository.findById(notificationId);
+  async markAsRead(id: string, userId: string) {
+    const notification = await notificationRepository.findById(id);
 
-    if (!notification || notification.userId !== userId) {
-      throw new Error('NOTIFICATION_NOT_FOUND');
+    if (!notification) {
+      throw new Error('Notificación no encontrada');
     }
 
-    await notificationRepository.markAsRead(notificationId);
+    if (notification.userId !== userId) {
+      throw new Error('No tienes permiso para acceder a esta notificación');
+    }
 
-    logger.info(`Notification marked as read: ${notificationId}`);
+    return await notificationRepository.markAsRead(id);
   }
 
   /**
-   * Marcar todas las notificaciones como leídas
+   * Marcar todas como leídas
    */
-  async markAllAsRead(userId: string) {
-    await notificationRepository.markAllAsRead(userId);
-
-    logger.info(`All notifications marked as read for user: ${userId}`);
+  async markAllAsRead(userId: string): Promise<number> {
+    return await notificationRepository.markAllAsRead(userId);
   }
 
-  // ========== HELPERS PARA NOTIFICACIONES COMUNES ==========
+  /**
+   * Obtener contador de no leídas
+   */
+  async getUnreadCount(userId: string): Promise<number> {
+    return await notificationRepository.countUnread(userId);
+  }
 
-  async sendWelcomeNotification(userId: string) {
-    return await this.create({
-      userId,
-      type: NotificationType.GENERAL,
-      title: '¡Bienvenido a Parking Top!',
-      message: 'Gracias por registrarte. Estamos aquí para ayudarte a encontrar el estacionamiento perfecto.'
+  /**
+   * Crear y enviar notificación
+   */
+  async createAndSend(data: {
+    userId: string;
+    type: NotificationType;
+    title: string;
+    message: string;
+    reservationId?: string;
+    data?: Record<string, string>;
+  }) {
+    // Crear notificación en BD
+    const notification = await notificationRepository.create({
+      userId: data.userId,
+      type: data.type,
+      title: data.title,
+      message: data.message,
+      reservationId: data.reservationId
     });
-  }
 
-  async sendReservationConfirmed(userId: string, reservationId: string, parkingName: string) {
-    return await this.create({
-      userId,
-      type: NotificationType.RESERVATION_CONFIRMED,
-      title: 'Reserva confirmada',
-      message: `Tu reserva en ${parkingName} ha sido confirmada exitosamente.`,
-      reservationId
-    });
-  }
-
-  async sendReservationReminder(userId: string, reservationId: string, parkingName: string, minutesUntil: number) {
-    return await this.create({
-      userId,
-      type: NotificationType.RESERVATION_REMINDER,
-      title: 'Recordatorio de reserva',
-      message: `Tu reserva en ${parkingName} comienza en ${minutesUntil} minutos.`,
-      reservationId
-    });
-  }
-
-  async sendOvertimeWarning(userId: string, reservationId: string, overtimeMinutes: number) {
-    return await this.create({
-      userId,
-      type: NotificationType.OVERTIME_WARNING,
-      title: 'Tiempo extra detectado',
-      message: `Has excedido tu tiempo de reserva por ${overtimeMinutes} minutos. Se aplicarán cargos adicionales.`,
-      reservationId
-    });
-  }
-
-  async sendOvertimeCharged(userId: string, reservationId: string, amount: number, hours: number) {
-    return await this.create({
-      userId,
-      type: NotificationType.OVERTIME_CHARGED,
-      title: 'Cargo por tiempo extra',
-      message: `Se ha cobrado $${amount} MXN por ${hours.toFixed(1)} horas de tiempo extra.`,
-      reservationId
-    });
-  }
-
-  async sendPaymentReceived(userId: string, amount: number, reservationId?: string) {
-    return await this.create({
-      userId,
-      type: NotificationType.PAYMENT_RECEIVED,
-      title: 'Pago recibido',
-      message: `Hemos recibido tu pago de $${amount} MXN.`,
-      reservationId
-    });
-  }
-
-  async sendSubscriptionExpiring(userId: string, subscriptionId: string, daysLeft: number) {
-    return await this.create({
-      userId,
-      type: NotificationType.SUBSCRIPTION_EXPIRING,
-      title: 'Suscripción por vencer',
-      message: `Tu suscripción vence en ${daysLeft} días. Renueva para seguir disfrutando de todos los beneficios.`,
-      subscriptionId
-    });
-  }
-
-  async sendSubscriptionExpired(userId: string, subscriptionId: string) {
-    return await this.create({
-      userId,
-      type: NotificationType.SUBSCRIPTION_EXPIRED,
-      title: 'Suscripción vencida',
-      message: 'Tu suscripción ha vencido. Renueva para seguir usando el servicio.',
-      subscriptionId
-    });
-  }
-
-  async sendPaymentFailed(userId: string, subscriptionId: string) {
-    return await this.create({
-      userId,
-      type: NotificationType.PAYMENT_FAILED,
-      title: 'Error en el pago',
-      message: 'No pudimos procesar tu pago. Por favor actualiza tu método de pago.',
-      subscriptionId
-    });
-  }
-
-  async sendParkingApproved(userId: string, parkingName: string) {
-    return await this.create({
-      userId,
-      type: NotificationType.PARKING_APPROVED,
-      title: 'Estacionamiento aprobado',
-      message: `Tu estacionamiento "${parkingName}" ha sido aprobado y está activo.`
-    });
-  }
-
-  // ========== CRON JOBS ==========
-
-  async retryPendingNotifications() {
-    try {
-      const pending = await notificationRepository.findPendingToSend();
-
-      let successCount = 0;
-
-      for (const notification of pending) {
-        try {
-          await firebaseService.sendToUser(notification.userId, {
-            title: notification.title,
-            body: notification.message,
-            data: {
-              notificationId: notification.id,
-              type: notification.type
-            }
-          });
-
-          await notificationRepository.update(notification.id, {
-            isSent: true,
-            sentAt: new Date()
-          });
-
-          successCount++;
-        } catch (error) {
-          logger.error(`Failed to retry notification ${notification.id}:`, error);
-        }
+    // Enviar push notification
+    await firebaseService.sendToUser(data.userId, {
+      title: data.title,
+      body: data.message,
+      data: {
+        notificationId: notification.id,
+        type: data.type,
+        ...(data.data || {})
       }
+    });
 
-      logger.info(`Retried ${successCount}/${pending.length} pending notifications`);
+    logger.info(`Notification created and sent: ${notification.id} to user ${data.userId}`);
 
-      return { total: pending.length, success: successCount };
-    } catch (error) {
-      logger.error('Error retrying pending notifications:', error);
-      throw error;
-    }
+    return notification;
   }
 
-  async cleanupOldNotifications() {
-    try {
-      const sixMonthsAgo = new Date();
-      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+  /**
+   * Registrar token de push
+   */
+  async registerPushToken(
+    userId: string,
+    token: string,
+    platform: 'android' | 'ios' | 'web'
+  ) {
+    // Verificar si ya existe el token exacto
+    const existingToken = await pushTokenRepository.findByToken(token);
 
-      const deleted = await notificationRepository.deleteOldNotifications(sixMonthsAgo);
-
-      logger.info(`Cleaned up ${deleted} old notifications`);
-
-      return { deleted };
-    } catch (error) {
-      logger.error('Error cleaning up notifications:', error);
-      throw error;
+    if (existingToken) {
+      // Si existe pero está inactivo, reactivarlo
+      if (!existingToken.isActive) {
+        return await pushTokenRepository.update(existingToken.id, { isActive: true });
+      }
+      // Si ya existe y está activo, retornarlo
+      return existingToken;
     }
+
+    // Buscar si hay un token existente del mismo usuario y plataforma
+    const existingPlatformToken = await pushTokenRepository.findByUserAndPlatform(userId, platform);
+
+    if (existingPlatformToken) {
+      // Actualizar el token existente
+      return await pushTokenRepository.update(existingPlatformToken.id, { token, isActive: true });
+    }
+
+    // Crear nuevo token
+    return await pushTokenRepository.create({
+      userId,
+      token,
+      platform
+    });
+  }
+
+  /**
+   * Remover token de push
+   */
+  async removePushToken(token: string) {
+    const pushToken = await pushTokenRepository.findByToken(token);
+
+    if (!pushToken) {
+      throw new Error('Token no encontrado');
+    }
+
+    await pushTokenRepository.deactivate(pushToken.id);
+
+    logger.info(`Push token deactivated: ${token}`);
+  }
+
+  /**
+   * Enviar notificación masiva (admin)
+   */
+  async sendBulkNotification(
+    userIds: string[],
+    notification: {
+      title: string;
+      body: string;
+      data?: Record<string, string>;
+    }
+  ) {
+    for (const userId of userIds) {
+      await this.createAndSend({
+        userId,
+        type: NotificationType.GENERAL,
+        title: notification.title,
+        message: notification.body,
+        data: notification.data
+      });
+    }
+
+    logger.info(`Bulk notification sent to ${userIds.length} users`);
   }
 }
 
