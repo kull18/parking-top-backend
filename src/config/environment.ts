@@ -57,11 +57,14 @@ cloudinary: {
   apiKey: process.env.CLOUDINARY_API_KEY || '',
   apiSecret: process.env.CLOUDINARY_API_SECRET || ''
 },
-  maps: {
-    googleApiKey: process.env.GOOGLE_MAPS_API_KEY || '',
-    mapboxToken: process.env.MAPBOX_TOKEN || '',
-    preferredProvider: (process.env.MAPS_PROVIDER || 'google') as 'google' | 'mapbox'
-  },
+
+maps: {
+  googleApiKey: process.env.GOOGLE_MAPS_API_KEY,
+  mapboxToken: process.env.MAPBOX_TOKEN,
+  provider: process.env.MAPS_PROVIDER || 'mapbox',
+  defaultZoom: parseInt(process.env.MAPS_DEFAULT_ZOOM || '15', 10),
+  defaultRadius: parseInt(process.env.MAPS_DEFAULT_RADIUS || '5000', 10)
+},
 
   frontend: {
     url: process.env.FRONTEND_URL || 'http://localhost:3001',
