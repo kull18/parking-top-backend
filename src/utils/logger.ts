@@ -1,5 +1,35 @@
+// src/utils/logger.ts
 import winston from 'winston';
 import { config } from '@/config/environment';
+
+// Helper para serializar errores con referencias circulares de forma segura
+const safeStringify = (obj: any): string => {
+  const seen = new WeakSet();
+  
+  return JSON.stringify(obj, (key, value) => {
+    // Manejar objetos con referencias circulares
+    if (typeof value === 'object' && value !== null) {
+      if (seen.has(value)) {
+        return '[Circular]';
+      }
+      seen.add(value);
+    }
+    
+    // Limpiar propiedades de axios que causan problemas
+    if (key === 'request' || key === 'response' || key === 'config') {
+      if (value && typeof value === 'object') {
+        return {
+          ...(value.status && { status: value.status }),
+          ...(value.statusText && { statusText: value.statusText }),
+          ...(value.data && { data: value.data }),
+          ...(value.message && { message: value.message })
+        };
+      }
+    }
+    
+    return value;
+  }, 2);
+};
 
 const logger = winston.createLogger({
   level: config.logging.level,
@@ -15,9 +45,13 @@ const logger = winston.createLogger({
       format: winston.format.combine(
         winston.format.colorize(),
         winston.format.printf(({ timestamp, level, message, ...meta }) => {
-          return `${timestamp} [${level}]: ${message} ${
-            Object.keys(meta).length ? JSON.stringify(meta, null, 2) : ''
-          }`;
+          try {
+            const metaStr = Object.keys(meta).length ? safeStringify(meta) : '';
+            return `${timestamp} [${level}]: ${message} ${metaStr}`;
+          } catch (error) {
+            // Fallback si aún así falla
+            return `${timestamp} [${level}]: ${message} [Error serializing metadata]`;
+          }
         })
       )
     })

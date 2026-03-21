@@ -8,6 +8,7 @@ import paymentRoutes from './payment.routes';
 import reviewRoutes from './review.routes';
 import notificationRoutes from './notification.routes';
 import dashboardRoutes from './dashboard.routes';
+import mapsRoutes from './maps.routes';
 
 const router = Router();
 
@@ -21,5 +22,6 @@ router.use('/payments', paymentRoutes);
 router.use('/reviews', reviewRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/dashboard', dashboardRoutes);
+router.use('/maps', mapsRoutes);
 
 export default router;
