@@ -7,6 +7,7 @@ import { startOvertimeJob, stopOvertimeJob } from './check-overtime.job';
 import { startSubscriptionJobs, stopSubscriptionJobs } from './check-subscriptions.job';
 import { startRemindersJob, stopRemindersJob } from './send-reminders.job';
 import { startCleanupJob, stopCleanupJob } from './cleanup.job';
+import { startPayoutCronJobs, stopPayoutCronJobs } from './payout.cron';
 
 /**
  * Initialize and start all cron jobs
@@ -14,11 +15,7 @@ import { startCleanupJob, stopCleanupJob } from './cleanup.job';
 export const startAllJobs = (): void => {
   if (config.app.env === 'production' || config.app.enableCronJobs) {
     logger.info('🕐 Starting cron jobs...');
-
-    // Start overtime check job (every 5 minutes)
     startOvertimeJob();
-
-    // Start subscription jobs (daily)
     startSubscriptionJobs();
 
     // Start reminders job (every 15 minutes)
@@ -26,6 +23,7 @@ export const startAllJobs = (): void => {
 
     // Start cleanup job (daily at 2 AM)
     startCleanupJob();
+    startPayoutCronJobs()
 
     logger.info('✅ All cron jobs started successfully');
   } else {
@@ -43,6 +41,7 @@ export const stopAllJobs = (): void => {
   stopSubscriptionJobs();
   stopRemindersJob();
   stopCleanupJob();
+  stopPayoutCronJobs()
 
   logger.info('✅ All cron jobs stopped');
 };

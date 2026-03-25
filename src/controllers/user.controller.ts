@@ -155,12 +155,21 @@ export class UserController {
   async getNotifications(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user!.userId;
-      const { unread } = req.query;
 
+      const { page = '1', perPage = '20', unread } = req.query;
+      const pageNum = parseInt(page as string, 10);
+      const perPageNum = parseInt(perPage as string, 10);
+      
+      let isRead: boolean | undefined;
+      if (unread !== undefined) {
+        isRead = unread === 'false';
+      }
       const result = await notificationService.getUserNotifications(
         userId,
-        unread === 'true'
-      );
+        pageNum,      // ✅ page (number)
+        perPageNum,   // ✅ perPage (number)
+        isRead        // ✅ isRead (boolean opcional)
+        );
 
       sendSuccess(res, result);
     } catch (error) {

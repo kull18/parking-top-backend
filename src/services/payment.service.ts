@@ -46,8 +46,6 @@ export class PaymentService {
         netAmount: amount,
         paymentMethod: 'mercadopago',
         status: PaymentStatus.PENDING,
-        // NO guardamos transactionId aún porque no existe
-        // transactionId: null,
         metadata: {
           preferenceId: mpPreference.id, // Guardamos el preference_id aquí
           externalReference: String(Date.now())
