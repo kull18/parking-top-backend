@@ -47,80 +47,89 @@ export class SubscriptionService {
   }
 
   /**
-   * Crear nueva suscripción con MercadoPago
-   */
-  async createSubscription(userId: string, data: {
-    planId: string;
-  }) {
-    try {
-      // Verificar que no tenga suscripción activa
-      const existingSubscription = await subscriptionRepository.findActiveByUserId(userId);
+ * Crear nueva suscripción con MercadoPago
+ */
+async createSubscription(userId: string, data: {
+  planId: string;
+}) {
+  try {
+    // Verificar que no tenga suscripción activa
+    const existingSubscription = await subscriptionRepository.findActiveByUserId(userId);
 
-      if (existingSubscription) {
-        throw new Error('ALREADY_SUBSCRIBED');
-      }
-
-      // Obtener plan
-      const plan = await this.getPlanById(data.planId);
-
-      // Obtener usuario
-      const user = await userRepository.findById(userId);
-
-      if (!user) {
-        throw new Error('USER_NOT_FOUND');
-      }
-
-      // Crear suscripción en MercadoPago
-      const mpSubscription = await mercadopagoService.createSubscription({
-        reason: `${plan.displayName} - Parking Top`,
-        autoRecurringAmount: Number(plan.monthlyPrice),
-        frequency: 1,
-        frequencyType: 'months',
-        payerEmail: user.email
-      });
-
-      // Calcular fechas
-      const now = new Date();
-      const trialEndDate = plan.trialDays > 0
-        ? new Date(now.getTime() + plan.trialDays * 24 * 60 * 60 * 1000)
-        : undefined;
-
-      const currentPeriodEnd = new Date();
-      currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
-
-      // Crear suscripción en DB
-      const subscription = await subscriptionRepository.create({
-        userId,
-        planId: plan.id,
-        status: plan.trialDays > 0 ? SubscriptionStatus.TRIAL : SubscriptionStatus.ACTIVE,
-        startDate: now,
-        trialStartDate: plan.trialDays > 0 ? now : undefined,
-        trialEndDate,
-        currentPeriodStart: now,
-        currentPeriodEnd,
-        mpSubscriptionId: mpSubscription.id
-      });
-
-      logger.info(`Subscription created for user ${userId}: ${subscription.id}`);
-
-      // Enviar notificación
-      await notificationService.create({
-        userId,
-        type: 'subscription_created' as any,
-        title: '¡Suscripción activada!',
-        message: `Tu plan ${plan.displayName} está activo. ${plan.trialDays > 0 ? `Tienes ${plan.trialDays} días de prueba gratis.` : 'Completa el pago en MercadoPago para activar tu cuenta.'}`,
-        subscriptionId: subscription.id
-      });
-
-      return {
-        subscription,
-        paymentUrl: mpSubscription.init_point // URL para completar el pago
-      };
-    } catch (error: any) {
-      logger.error('Error creating subscription:', error);
-      throw error;
+    if (existingSubscription) {
+      throw new Error('ALREADY_SUBSCRIBED');
     }
+
+    // Obtener plan
+    const plan = await this.getPlanById(data.planId);
+
+    // Obtener usuario
+    const user = await userRepository.findById(userId);
+
+    if (!user) {
+      throw new Error('USER_NOT_FOUND');
+    }
+
+    // Crear PreApproval en MercadoPago (suscripción recurrente)
+    const mpSubscription = await mercadopagoService.createSubscriptionPreApproval({
+      reason: `${plan.displayName} - Parking Top`,
+      autoRecurringAmount: Number(plan.monthlyPrice),
+      frequency: 1,
+      frequencyType: 'months',
+      payerEmail: user.email
+    });
+
+    // Calcular fechas
+    const now = new Date();
+    const trialEndDate = plan.trialDays > 0
+      ? new Date(now.getTime() + plan.trialDays * 24 * 60 * 60 * 1000)
+      : undefined;
+
+    const currentPeriodEnd = new Date();
+    currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
+
+    // Crear suscripción en DB (estado PENDING hasta que pague)
+    const subscription = await subscriptionRepository.create({
+      userId,
+      planId: plan.id,
+      status: SubscriptionStatus.PENDING, // ← CAMBIO: inicia como PENDING
+      startDate: now,
+      trialStartDate: plan.trialDays > 0 ? now : undefined,
+      trialEndDate,
+      currentPeriodStart: now,
+      currentPeriodEnd,
+      mpPreapprovalId: mpSubscription.id // ← CAMBIO: guardar PreApproval ID
+    });
+
+    logger.info(`Subscription created for user ${userId}: ${subscription.id}`);
+
+    // Enviar notificación
+    await notificationService.create({
+      userId,
+      type: 'subscription_created' as any,
+      title: '¡Suscripción creada!',
+      message: `Tu plan ${plan.displayName} está listo. Completa el pago para activarlo.`,
+      subscriptionId: subscription.id
+    });
+
+    return {
+      subscription: {
+        id: subscription.id,
+        plan: plan.displayName,
+        status: subscription.status,
+        amount: Number(plan.monthlyPrice),
+        trialDays: plan.trialDays
+      },
+      paymentUrl: mpSubscription.init_point, // ← URL para que el usuario pague
+      message: plan.trialDays > 0 
+        ? `Completa el pago para activar tu período de prueba de ${plan.trialDays} días gratis.`
+        : 'Completa el pago para activar tu suscripción.'
+    };
+  } catch (error: any) {
+    logger.error('Error creating subscription:', error);
+    throw error;
   }
+}
 
   /**
    * Actualizar plan (upgrade/downgrade)

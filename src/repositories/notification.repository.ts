@@ -39,15 +39,24 @@ export class NotificationRepository {
    */
   async create(data: {
     userId: string;
-    type: NotificationType;
+    type: string | NotificationType;
     title: string;
     message: string;
     reservationId?: string;
+    subscriptionId?: string;
+    data?: any;
   }) {
     return await prisma.notification.create({
       data: {
-        ...data,
-        isRead: false
+        userId: data.userId,
+        type: data.type,
+        title: data.title,
+        message: data.message,
+        reservationId: data.reservationId,
+        subscriptionId: data.subscriptionId,
+        data: data.data,
+        isRead: false,
+        isSent: false
       }
     });
   }
@@ -101,6 +110,19 @@ export class NotificationRepository {
   async delete(id: string) {
     return await prisma.notification.delete({
       where: { id }
+    });
+  }
+
+  /**
+   * Marcar como enviada
+   */
+  async markAsSent(id: string) {
+    return await prisma.notification.update({
+      where: { id },
+      data: {
+        isSent: true,
+        sentAt: new Date()
+      }
     });
   }
 }

@@ -36,6 +36,19 @@ export class SubscriptionRepository {
     });
   }
 
+  /**
+ * Buscar suscripción por MercadoPago PreApproval ID
+ */
+async findByMpPreapprovalId(mpPreapprovalId: string) {
+  return await prisma.subscription.findFirst({
+    where: { mpPreapprovalId },
+    include: {
+      user: true,
+      plan: true
+    }
+  });
+}
+
   async findActiveByUserId(userId: string) {
     return await prisma.subscription.findFirst({
       where: {

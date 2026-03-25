@@ -7,6 +7,7 @@ import { ReservationStatus, PaymentType, PaymentStatus } from '@/types/enums';
 import { calculateHoursBetween, calculateCost, calculateCommission, generateReservationCode } from '@/utils/helpers';
 import mercadopagoService from '@/integrations/mercadopago.client';
 import logger from '@/utils/logger';
+import balanceService from '@/services/balance.service';
 
 export class ReservationService {
 
@@ -174,16 +175,16 @@ export class ReservationService {
   async checkOut(reservationId: string) {
     const reservation = await reservationRepository.findById(reservationId);
     if (!reservation) throw new Error('Reserva no encontrada');
-
+ 
     const now = new Date();
     const overtimeHours = calculateHoursBetween(reservation.endTime, now);
-
+ 
     let overtimeCost = 0;
-
+ 
     if (overtimeHours > 0) {
       const parking = await parkingRepository.findById(reservation.parkingLotId);
       overtimeCost = calculateCost(overtimeHours, Number(parking!.overtimeRatePerHour));
-
+ 
       await prisma.overtimeCharge.create({
         data: {
           reservationId,
@@ -194,7 +195,7 @@ export class ReservationService {
         }
       });
     }
-
+ 
     const updated = await reservationRepository.update(reservationId, {
       status: ReservationStatus.COMPLETED,
       actualExitTime: now,
@@ -203,16 +204,16 @@ export class ReservationService {
       totalCost: Number(reservation.baseCost) + overtimeCost,
       completedAt: now
     });
-
+ 
     if (reservation.parkingSpotId) {
       await prisma.parkingSpot.update({
         where: { id: reservation.parkingSpotId },
         data: { status: 'available' }
       });
     }
-
+ 
     await parkingRepository.updateAvailableSpots(reservation.parkingLotId, 1);
-
+ 
     if (overtimeCost > 0) {
       await notificationService.sendOvertimeCharged(
         reservation.userId,
@@ -221,10 +222,22 @@ export class ReservationService {
         overtimeHours
       );
     }
-
+ 
+    // ✅ NUEVO: Actualizar balance del propietario
+    try {
+      const parking = await parkingRepository.findById(reservation.parkingLotId);
+      if (parking) {
+        await balanceService.calculateOwnerBalance(parking.ownerId);
+        logger.info(`Balance updated for owner ${parking.ownerId} after completing reservation ${reservationId}`);
+      }
+    } catch (error) {
+      logger.error('Error updating owner balance:', error);
+    }
+ 
     logger.info(`Check-out completed for reservation: ${reservationId}`);
     return updated;
   }
+
 
   /**
    * Pagar overtime

@@ -79,15 +79,25 @@ export enum NotificationType {
 }
 
 export enum SubscriptionStatus {
+  PENDING = 'pending',        // ← Verificar que esté
+  TRIAL = 'trial',
   ACTIVE = 'active',
   PAST_DUE = 'past_due',
   CANCELLED = 'cancelled',
-  EXPIRED = 'expired',
-  TRIAL = 'trial'
+  EXPIRED = 'expired'
 }
 
 export enum SubscriptionPlan {
   BASIC = 'basic',
   PREMIUM = 'premium',
   ENTERPRISE = 'enterprise'
+}
+
+export enum PayoutStatus {
+  PENDING = 'pending',
+  APPROVED = 'approved',
+  REJECTED = 'rejected',
+  PROCESSING = 'processing',
+  COMPLETED = 'completed',
+  FAILED = 'failed'
 }
