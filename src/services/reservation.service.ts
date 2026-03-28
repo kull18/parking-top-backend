@@ -22,13 +22,13 @@ export class ReservationService {
     notes?: string;
   }) {
     try {
-      const parking = await parkingRepository.findById(data.parkingLotId);
+      const parking = await prisma.parkingLot.findUnique({
+        where: { id: data.parkingLotId },
+        include: { subscription: { include: { plan: true } } }
+      });
       if (!parking) throw new Error('Estacionamiento no encontrado');
 
-      const subscription = await prisma.subscription.findUnique({
-        where: { id: parking.subscriptionId! },
-        include: { plan: true }
-      });
+      const subscription = parking.subscription;
 
       const hours = calculateHoursBetween(data.startTime, data.endTime);
       const baseCost = calculateCost(hours, Number(parking.basePricePerHour));
@@ -227,8 +227,8 @@ export class ReservationService {
     try {
       const parking = await parkingRepository.findById(reservation.parkingLotId);
       if (parking) {
-        await balanceService.calculateOwnerBalance(parking.ownerId);
-        logger.info(`Balance updated for owner ${parking.ownerId} after completing reservation ${reservationId}`);
+        await balanceService.calculateOwnerBalance(parking.owner.id);
+        logger.info(`Balance updated for owner ${parking.owner.id} after completing reservation ${reservationId}`);
       }
     } catch (error) {
       logger.error('Error updating owner balance:', error);

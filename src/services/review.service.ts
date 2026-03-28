@@ -60,13 +60,13 @@ export class ReviewService {
     
     if (parking) {
       await notificationRepository.create({
-        userId: parking.ownerId,
+        userId: parking.owner.id,
         type: NotificationType.GENERAL,
         title: 'Nueva reseña recibida',
         message: `${userFullName || 'Un cliente'} dejó una reseña de ${rating} estrellas en ${parking.name}`
       });
 
-      await firebaseService.sendToUser(parking.ownerId, {
+      await firebaseService.sendToUser(parking.owner.id, {
         title: 'Nueva reseña',
         body: `Recibiste una calificación de ${rating} estrellas`,
         data: {
