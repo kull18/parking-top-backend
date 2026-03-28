@@ -10,6 +10,7 @@ const router = Router();
 
 // Rutas públicas
 router.get('/nearby', validateQuery(nearbyParkingSchema), parkingController.getNearby);
+router.get('/parking-lots', parkingController.getParkinkLots);
 router.get('/:id', parkingController.getById);
 
 // Rutas protegidas (propietarios)

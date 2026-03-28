@@ -37,6 +37,10 @@ async getNearby(latitude: number, longitude: number, radius: number = 5000) {
   }
 }
 
+async getParkinkLots() {
+  return await parkingRepository.getParkingLots();
+}
+
   async getById(id: string) {
     return await parkingRepository.findById(id);
   }
@@ -114,7 +118,7 @@ async getNearby(latitude: number, longitude: number, radius: number = 5000) {
       throw new Error('Estacionamiento no encontrado');
     }
 
-    if (parking.ownerId !== ownerId) {
+    if (parking.owner.id !== ownerId) {
       throw new Error('No tienes permiso para editar este estacionamiento');
     }
 
@@ -128,7 +132,7 @@ async getNearby(latitude: number, longitude: number, radius: number = 5000) {
       throw new Error('Estacionamiento no encontrado');
     }
 
-    if (parking.ownerId !== ownerId) {
+    if (parking.owner.id !== ownerId) {
       throw new Error('No tienes permiso para eliminar este estacionamiento');
     }
 

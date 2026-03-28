@@ -25,6 +25,15 @@ export class ParkingController {
     }
   }
 
+  async getParkinkLots(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const parkings = await parkingService.getParkinkLots();
+      sendSuccess(res, parkings);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async getById(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const { id } = req.params;
@@ -95,7 +104,7 @@ export class ParkingController {
         return;
       }
 
-      if (currentParking.ownerId !== userId) {
+      if (currentParking.owner.id !== userId) {
         sendError(res, 'FORBIDDEN', 'No tienes permiso para editar este estacionamiento', 403);
         return;
       }
