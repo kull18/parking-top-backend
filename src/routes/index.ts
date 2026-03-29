@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import authRoutes from './auth.routes';
 import userRoutes from './user.routes';
+import vehicleRoutes from './vehicle.routes';
 import subscriptionRoutes from './subscription.routes';
 import parkingRoutes from './parking.routes';
 import reservationRoutes from './reservation.routes';
@@ -16,6 +17,7 @@ const router = Router();
 // Registrar todas las rutas
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
+router.use('/vehicles', vehicleRoutes);
 router.use('/subscriptions', subscriptionRoutes);
 router.use('/parkings', parkingRoutes);
 router.use('/reservations', reservationRoutes);
