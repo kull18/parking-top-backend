@@ -4,7 +4,6 @@ import { ParkingStatus } from '@/types/enums';
 import logger from '@/utils/logger';
 import { calculateDistance } from '@/utils/helpers';
 
-// Definir tipo extendido al inicio del archivo
 type ParkingFromRepo = Awaited<ReturnType<typeof parkingRepository.findActive>>[0];
 
 type ParkingWithDistance = ParkingFromRepo & {
@@ -13,33 +12,33 @@ type ParkingWithDistance = ParkingFromRepo & {
 
 export class ParkingService {
   
-async getNearby(latitude: number, longitude: number, radius: number = 5000) {
-  try {
-    const parkings = await parkingRepository.findActive();
+  async getNearby(latitude: number, longitude: number, radius: number = 5000) {
+    try {
+      const parkings = await parkingRepository.findActive();
 
-    const nearbyParkings = parkings
-      .map((parking: ParkingFromRepo): ParkingWithDistance => ({
-        ...parking,
-        distance: calculateDistance(
-          latitude,
-          longitude,
-          Number(parking.latitude),
-          Number(parking.longitude)
-        )
-      }))
-      .filter((parking: ParkingWithDistance) => parking.distance <= radius)
-      .sort((a: ParkingWithDistance, b: ParkingWithDistance) => a.distance - b.distance);
+      const nearbyParkings = parkings
+        .map((parking: ParkingFromRepo): ParkingWithDistance => ({
+          ...parking,
+          distance: calculateDistance(
+            latitude,
+            longitude,
+            Number(parking.latitude),
+            Number(parking.longitude)
+          )
+        }))
+        .filter((parking: ParkingWithDistance) => parking.distance <= radius)
+        .sort((a: ParkingWithDistance, b: ParkingWithDistance) => a.distance - b.distance);
 
-    return nearbyParkings;
-  } catch (error) {
-    logger.error('Error getting nearby parkings:', error);
-    throw error;
+      return nearbyParkings;
+    } catch (error) {
+      logger.error('Error getting nearby parkings:', error);
+      throw error;
+    }
   }
-}
 
-async getParkinkLots() {
-  return await parkingRepository.getParkingLots();
-}
+  async getParkinkLots() {
+    return await parkingRepository.getParkingLots();
+  }
 
   async getById(id: string) {
     return await parkingRepository.findById(id);
@@ -81,14 +80,15 @@ async getParkinkLots() {
         );
       }
 
-      // Crear estacionamiento
+      // ✅ CAMBIO AQUÍ: Crear estacionamiento en estado ACTIVE
       const parking = await parkingRepository.create({
         ...data,
         ownerId,
         subscriptionId: subscription.id,
         availableSpots: data.totalSpots,
-        status: ParkingStatus.PENDING_APPROVAL,
-        subscriptionVerifiedAt: new Date()
+        status: ParkingStatus.ACTIVE,  // ✅ Activo directamente
+        subscriptionVerifiedAt: new Date(),
+        approvedAt: new Date()  // ✅ Fecha de aprobación automática
       });
 
       // Crear espacios
@@ -103,7 +103,7 @@ async getParkinkLots() {
         data: spots
       });
 
-      logger.info(`Parking created: ${parking.id} by owner ${ownerId}`);
+      logger.info(`Parking created and activated: ${parking.id} by owner ${ownerId}`);
       return parking;
     } catch (error: any) {
       logger.error('Error creating parking:', error);
@@ -152,7 +152,6 @@ async getParkinkLots() {
       throw new Error('Estacionamiento no encontrado');
     }
 
-    // Verificar que haya espacios disponibles
     const overlappingReservations = await prisma.reservation.count({
       where: {
         parkingLotId: parkingId,
