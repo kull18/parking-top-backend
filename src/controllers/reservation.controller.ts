@@ -1,3 +1,4 @@
+// src/controllers/reservation.controller.ts - COMPLETO
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from '@/types/interfaces';
 import reservationService from '@/services/reservation.service';
@@ -6,112 +7,154 @@ import logger from '@/utils/logger';
 
 export class ReservationController {
 
+  /**
+   * Crear reserva con método de pago
+   */
   async create(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user!.userId;
-      const { parkingLotId, vehicleId, startTime, endTime, notes } = req.body;
+      const {
+        parkingLotId,
+        parkingSpotId, // ✅ Nuevo: espacio específico
+        vehicleId,
+        startTime,
+        endTime,
+        paymentMethod = 'mercadopago', // ✅ Default: MercadoPago
+        notes
+      } = req.body;
 
+      // Crear reserva
       const reservation = await reservationService.create(userId, {
         parkingLotId,
+        parkingSpotId, // ✅ Incluir spot
         vehicleId,
         startTime: new Date(startTime),
         endTime: new Date(endTime),
+        paymentMethod,
         notes
       });
 
-      sendSuccess(res, reservation, 201);
+      // Procesar pago
+      const paymentResult = await reservationService.processPayment(
+        reservation.id,
+        paymentMethod
+      );
+
+      sendSuccess(res, paymentResult, 201);
     } catch (error: any) {
       logger.error('Error creating reservation:', error);
-      sendError(res, 'RESERVATION_ERROR', error.message, 400);
+      sendError(res, 'CREATE_ERROR', error.message, 400);
     }
   }
 
-  async payOvertime(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
-  try {
-    const { id } = req.params;
-    const userEmail = req.user!.email;
-
-    const result = await reservationService.payOvertime(id, userEmail);
-    sendSuccess(res, result, 201);
-  } catch (error) {
-    next(error);
-  }
-}
-
-  async processPayment(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  /**
+   * Confirmar pago en efectivo (Owner o Admin)
+   */
+  async confirmCashPayment(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { reservationId } = req.params;
+      const { id } = req.params;
 
-      // MercadoPago no necesita paymentMethodId, se ingresa en su página
-      const result = await reservationService.processPayment(reservationId);
+      const reservation = await reservationService.confirmCashPayment(id);
 
-      sendSuccess(res, result);
+      sendSuccess(res, {
+        message: 'Pago en efectivo confirmado',
+        reservation
+      });
     } catch (error: any) {
-      sendError(res, 'PAYMENT_ERROR', error.message, 400);
+      logger.error('Error confirming cash payment:', error);
+      sendError(res, 'CONFIRM_ERROR', error.message, 400);
     }
   }
 
-  async confirmReservation(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const { reservationId } = req.params;
-
-      const reservation = await reservationService.confirmReservation(reservationId);
-
-      sendSuccess(res, reservation);
-    } catch (error: any) {
-      sendError(res, 'CONFIRMATION_ERROR', error.message, 400);
-    }
-  }
-
+  /**
+   * Check-in
+   */
   async checkIn(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { reservationId } = req.params;
+      const { id } = req.params;
 
-      const reservation = await reservationService.checkIn(reservationId);
+      const reservation = await reservationService.checkIn(id);
 
-      sendSuccess(res, reservation);
+      sendSuccess(res, {
+        message: 'Check-in exitoso',
+        reservation
+      });
     } catch (error: any) {
+      logger.error('Error in check-in:', error);
       sendError(res, 'CHECKIN_ERROR', error.message, 400);
     }
   }
 
+  /**
+   * Check-out
+   */
   async checkOut(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { reservationId } = req.params;
+      const { id } = req.params;
 
-      const reservation = await reservationService.checkOut(reservationId);
+      const reservation = await reservationService.checkOut(id);
 
-      sendSuccess(res, reservation);
+      sendSuccess(res, {
+        message: 'Check-out exitoso',
+        reservation
+      });
     } catch (error: any) {
+      logger.error('Error in check-out:', error);
       sendError(res, 'CHECKOUT_ERROR', error.message, 400);
     }
   }
 
+  /**
+   * Pagar overtime
+   */
+  async payOvertime(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const user = req.user!;
+
+      const result = await reservationService.payOvertime(id, user.email);
+
+      sendSuccess(res, result);
+    } catch (error: any) {
+      logger.error('Error paying overtime:', error);
+      sendError(res, 'PAYMENT_ERROR', error.message, 400);
+    }
+  }
+
+  /**
+   * Cancelar reserva
+   */
   async cancel(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
+      const { id } = req.params;
       const userId = req.user!.userId;
-      const { reservationId } = req.params;
       const { reason } = req.body;
 
-      const reservation = await reservationService.cancel(reservationId, userId, reason);
+      const reservation = await reservationService.cancel(id, userId, reason);
 
-      sendSuccess(res, reservation);
+      sendSuccess(res, {
+        message: 'Reserva cancelada exitosamente',
+        reservation
+      });
     } catch (error: any) {
+      logger.error('Error cancelling reservation:', error);
       sendError(res, 'CANCEL_ERROR', error.message, 400);
     }
   }
 
+  /**
+   * Obtener reservas del usuario
+   */
   async getUserReservations(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user!.userId;
       const { status } = req.query;
 
-      const statusFilter = status ? (status as string).split(',') : undefined;
+      const statusFilter = status
+        ? ((status as string).split(',') as Parameters<typeof reservationService.getUserReservations>[1])
+        : undefined;
 
-      const reservations = await reservationService.getUserReservations(
-        userId,
-        statusFilter as any
-      );
+      const reservations = await reservationService.getUserReservations(userId, statusFilter);
 
       sendSuccess(res, reservations);
     } catch (error) {
@@ -119,6 +162,31 @@ export class ReservationController {
     }
   }
 
+  /**
+   * Obtener reservas de un estacionamiento
+   */
+  async getParkingReservations(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { parkingId } = req.params;
+      const { status, startDate, endDate } = req.query;
+
+      const filters = {
+        ...(status && { status: (status as string).split(',') }),
+        ...(startDate && { startDate }),
+        ...(endDate && { endDate })
+      };
+
+      const reservations = await reservationService.getParkingReservations(parkingId, filters);
+
+      sendSuccess(res, reservations);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Obtener reserva por ID
+   */
   async getById(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const { id } = req.params;
@@ -133,6 +201,26 @@ export class ReservationController {
       sendSuccess(res, reservation);
     } catch (error) {
       next(error);
+    }
+  }
+
+  /**
+   * Verificar disponibilidad
+   */
+  async checkAvailability(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { parkingLotId, startTime, endTime } = req.query;
+
+      const availability = await reservationService.checkAvailability(
+        parkingLotId as string,
+        new Date(startTime as string),
+        new Date(endTime as string)
+      );
+
+      sendSuccess(res, availability);
+    } catch (error: any) {
+      logger.error('Error checking availability:', error);
+      sendError(res, 'AVAILABILITY_ERROR', error.message, 400);
     }
   }
 }
