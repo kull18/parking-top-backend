@@ -11,6 +11,7 @@ import reviewRoutes from './review.routes';
 import notificationRoutes from './notification.routes';
 import dashboardRoutes from './dashboard.routes';
 import mapsRoutes from './maps.routes';
+import parkingSpotRoutes from './parking-spot.routes';
 
 const router = Router();
 
@@ -27,5 +28,6 @@ router.use('/reviews', reviewRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/maps', mapsRoutes);
+router.use('/parking-spots', parkingSpotRoutes);
 
 export default router;
