@@ -29,8 +29,7 @@ router.use(authenticate);
  *   vehicleId?, 
  *   startTime, 
  *   endTime, 
- *   paymentMethod: "mercadopago" | "cash",
- *   notes?
+ *   paymentMethod: "mercadopago" | "cash"
  * }
  */
 router.post(

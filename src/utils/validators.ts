@@ -108,8 +108,7 @@ export const createReservationSchema = z.object({
     vehicleId: z.string().cuid('ID de vehículo inválido').optional(),
     startTime: z.string().datetime('Fecha de inicio inválida'),
     endTime: z.string().datetime('Fecha de fin inválida'),
-    paymentMethod: z.enum(['mercadopago', 'cash']).default('mercadopago'), // ✅ Nuevo
-    notes: z.string().max(500, 'Las notas no pueden exceder 500 caracteres').optional()
+    paymentMethod: z.enum(['mercadopago', 'cash']).default('mercadopago') // ✅ Nuevo
   }).refine(
     (data) => new Date(data.endTime) > new Date(data.startTime),
     {
@@ -124,8 +123,7 @@ export const updateReservationSchema = z.object({
     parkingSpotId: z.string().cuid().optional(), // ✅ Permitir actualizar spot
     vehicleId: z.string().cuid().optional(),
     startTime: z.string().datetime().optional(),
-    endTime: z.string().datetime().optional(),
-    notes: z.string().max(500).optional()
+    endTime: z.string().datetime().optional()
   })
 });
  
