@@ -21,7 +21,6 @@ export class ReservationService {
     startTime: Date;
     endTime: Date;
     paymentMethod: string;
-    notes?: string;
   }) {
     try {
       const parking = await parkingRepository.findById(data.parkingLotId);
@@ -57,7 +56,6 @@ export class ReservationService {
         totalCost: baseCost,
         commissionRate,
         commissionAmount,
-        notes: data.notes,
         status: ReservationStatus.PENDING
       });
 

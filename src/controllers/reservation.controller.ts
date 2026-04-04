@@ -19,8 +19,7 @@ export class ReservationController {
         vehicleId,
         startTime,
         endTime,
-        paymentMethod = 'mercadopago', // ✅ Default: MercadoPago
-        notes
+        paymentMethod = 'mercadopago' // ✅ Default: MercadoPago
       } = req.body;
 
       // Crear reserva
@@ -30,8 +29,7 @@ export class ReservationController {
         vehicleId,
         startTime: new Date(startTime),
         endTime: new Date(endTime),
-        paymentMethod,
-        notes
+        paymentMethod
       });
 
       // Procesar pago

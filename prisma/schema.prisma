@@ -242,7 +242,6 @@ model Reservation {
   status           String    @default("pending") // pending | confirmed | active | completed | cancelled | no_show
   paymentMethod    String    @default("mercadopago") // mercadopago | cash  ✅ NUEVO
   
-  notes            String?
   overtimeHours    Decimal?  @db.Decimal(8, 2)
   cancelledAt      DateTime?
   cancellationReason String?

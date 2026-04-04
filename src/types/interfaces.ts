@@ -138,7 +138,6 @@ export interface IReservation {
   totalCost: number;
   commissionRate: number;
   commissionAmount: number;
-  notes?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -187,7 +186,6 @@ export interface CreateReservationDTO {
   vehicleId?: string;
   startTime: Date;
   endTime: Date;
-  notes?: string;
 }
 
 export interface NearbyParkingQuery {
