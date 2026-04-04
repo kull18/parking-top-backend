@@ -90,63 +90,67 @@ export class ParkingController {
   }
 
   async update(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const { id } = req.params;
-      const userId = req.user!.userId;
-      const updateData = req.body;
-      const files = req.files as Express.Multer.File[];
+  try {
+    const { id } = req.params;
+    const userId = req.user!.userId;
 
-      // Obtener parking actual
-      const currentParking = await parkingService.getById(id);
+    const { images, ...updateData } = req.body;
 
-      if (!currentParking) {
-        sendError(res, 'NOT_FOUND', 'Estacionamiento no encontrado', 404);
-        return;
+    const files = req.files as Express.Multer.File[];
+
+    // Obtener parking actual
+    const currentParking = await parkingService.getById(id);
+
+    if (!currentParking) {
+      sendError(res, 'NOT_FOUND', 'Estacionamiento no encontrado', 404);
+      return;
+    }
+
+    if (currentParking.owner.id !== userId) {
+      sendError(res, 'FORBIDDEN', 'No tienes permiso para editar este estacionamiento', 403);
+      return;
+    }
+
+    let imageUrls: string[] | undefined;
+
+    // Si se enviaron nuevas imágenes
+    if (files && files.length > 0) {
+      imageUrls = [];
+
+      // Eliminar imágenes anteriores de Cloudinary
+      for (const oldUrl of currentParking.images) {
+        const publicId = cloudinaryService.extractPublicId(oldUrl);
+        await cloudinaryService.deleteImage(publicId).catch(() => {});
       }
 
-      if (currentParking.owner.id !== userId) {
-        sendError(res, 'FORBIDDEN', 'No tienes permiso para editar este estacionamiento', 403);
-        return;
-      }
+      // Subir nuevas imágenes
+      for (const file of files) {
+        const result = await cloudinaryService.uploadBuffer(file.buffer, {
+          folder: 'parking-top/parkings'
+        });
 
-      // Subir nuevas imágenes si se enviaron
-      let imageUrls: string[] | undefined;
-
-      if (files && files.length > 0) {
-        imageUrls = [];
-
-        // Eliminar imágenes anteriores de Cloudinary
-        for (const oldUrl of currentParking.images) {
-          const publicId = cloudinaryService.extractPublicId(oldUrl);
-          await cloudinaryService.deleteImage(publicId).catch(() => {});
-        }
-
-        // Subir nuevas imágenes
-        for (const file of files) {
-          const result = await cloudinaryService.uploadBuffer(file.buffer, {
-            folder: 'parking-top/parkings'
-          });
-          imageUrls.push(result.secureUrl);
-        }
-      }
-
-      // Actualizar a través del servicio
-      const updated = await parkingService.update(id, userId, {
-        ...updateData,
-        ...(imageUrls && { images: imageUrls })
-      });
-
-      sendSuccess(res, updated);
-    } catch (error: any) {
-      if (error.message === 'NOT_FOUND') {
-        sendError(res, 'NOT_FOUND', 'Estacionamiento no encontrado', 404);
-      } else if (error.message === 'FORBIDDEN') {
-        sendError(res, 'FORBIDDEN', 'No tienes permiso para editar este estacionamiento', 403);
-      } else {
-        next(error);
+        imageUrls.push(result.secureUrl);
       }
     }
+
+    // Actualizar
+    const updated = await parkingService.update(id, userId, {
+      ...updateData,
+      ...(imageUrls && { images: { set: imageUrls } }) // ✅ forma correcta para Prisma
+    });
+
+    sendSuccess(res, updated);
+
+  } catch (error: any) {
+    if (error.message === 'NOT_FOUND') {
+      sendError(res, 'NOT_FOUND', 'Estacionamiento no encontrado', 404);
+    } else if (error.message === 'FORBIDDEN') {
+      sendError(res, 'FORBIDDEN', 'No tienes permiso para editar este estacionamiento', 403);
+    } else {
+      next(error);
+    }
   }
+}
 
   async delete(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
