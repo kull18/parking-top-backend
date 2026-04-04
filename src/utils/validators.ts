@@ -63,6 +63,31 @@ export const createReviewSchema = z.object({
   rating: z.number().int().min(1).max(5),
   comment: z.string().min(10).max(500).optional()
 });
+
+export const createParkingSpotSchema = z.object({
+  parkingLotId: z.string().cuid('parkingLotId inválido'),
+  spotNumber: z.string().min(1, 'El número del espacio es requerido'),
+  status: z.enum(['available', 'occupied', 'reserved', 'maintenance']).optional(),
+  vehicleType: z.string().min(1).optional(),
+  floor: z.string().optional(),
+  section: z.string().optional()
+});
+
+export const updateParkingSpotSchema = z.object({
+  spotNumber: z.string().min(1, 'El número del espacio es requerido').optional(),
+  status: z.enum(['available', 'occupied', 'reserved', 'maintenance']).optional(),
+  vehicleType: z.string().min(1).optional(),
+  floor: z.string().nullable().optional(),
+  section: z.string().nullable().optional()
+}).refine(
+  (data) =>
+    data.spotNumber !== undefined ||
+    data.status !== undefined ||
+    data.vehicleType !== undefined ||
+    data.floor !== undefined ||
+    data.section !== undefined,
+  { message: 'Debes enviar al menos un campo para actualizar' }
+);
  
 export const respondReviewSchema = z.object({
   response: z.string().min(10).max(500)
