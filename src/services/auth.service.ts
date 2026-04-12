@@ -122,6 +122,39 @@ export class AuthService {
     return user;
   }
 
+  async getOwnerSubscriptionStatus(userId: string) {
+    const latestSubscription = await prisma.subscription.findFirst({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        status: true,
+        currentPeriodEnd: true,
+        plan: {
+          select: {
+            id: true,
+            name: true,
+            displayName: true
+          }
+        }
+      }
+    });
+
+    const activeSubscription = await prisma.subscription.findFirst({
+      where: {
+        userId,
+        status: { in: ['active', 'trial'] }
+      },
+      select: { id: true }
+    });
+
+    return {
+      hasSubscription: Boolean(latestSubscription),
+      hasActiveSubscription: Boolean(activeSubscription),
+      subscription: latestSubscription
+    };
+  }
+
   async updateUserProfile(userId: string, data: {
     fullName?: string;
     phone?: string;

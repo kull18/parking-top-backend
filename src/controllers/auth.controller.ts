@@ -86,6 +86,18 @@ export class AuthController {
     }
   }
 
+  async getOwnerSubscriptionStatus(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user!.userId;
+
+      const status = await authService.getOwnerSubscriptionStatus(userId);
+
+      sendSuccess(res, status);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async updateProfile(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user!.userId;

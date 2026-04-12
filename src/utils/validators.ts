@@ -102,41 +102,33 @@ export const updateReviewSchema = z.object({
 );
 
 export const createReservationSchema = z.object({
-  body: z.object({
-    parkingLotId: z.string().cuid('ID de estacionamiento inválido'),
-    parkingSpotId: z.string().cuid('ID de espacio inválido').optional(), // ✅ Nuevo
-    vehicleId: z.string().cuid('ID de vehículo inválido').optional(),
-    startTime: z.string().datetime('Fecha de inicio inválida'),
-    endTime: z.string().datetime('Fecha de fin inválida'),
-    paymentMethod: z.enum(['mercadopago', 'cash']).default('mercadopago') // ✅ Nuevo
-  }).refine(
-    (data) => new Date(data.endTime) > new Date(data.startTime),
-    {
-      message: 'La fecha de fin debe ser posterior a la fecha de inicio',
-      path: ['endTime']
-    }
-  )
-});
+  parkingLotId:  z.string().cuid('ID de estacionamiento inválido'),
+  parkingSpotId: z.string().cuid('ID de espacio inválido').optional(),
+  vehicleId:     z.string().cuid('ID de vehículo inválido').optional(),
+  startTime:     z.string().datetime('Fecha de inicio inválida'),
+  endTime:       z.string().datetime('Fecha de fin inválida'),
+  paymentMethod: z.enum(['mercadopago', 'cash']).default('mercadopago')
+}).refine(
+  (data) => new Date(data.endTime) > new Date(data.startTime),
+  {
+    message: 'La fecha de fin debe ser posterior a la fecha de inicio',
+    path: ['endTime']
+  }
+);
  
 export const updateReservationSchema = z.object({
-  body: z.object({
-    parkingSpotId: z.string().cuid().optional(), // ✅ Permitir actualizar spot
-    vehicleId: z.string().cuid().optional(),
-    startTime: z.string().datetime().optional(),
-    endTime: z.string().datetime().optional()
-  })
+  parkingSpotId: z.string().cuid().optional(),
+  vehicleId:     z.string().cuid().optional(),
+  startTime:     z.string().datetime().optional(),
+  endTime:       z.string().datetime().optional()
 });
- 
+
 export const cancelReservationSchema = z.object({
-  body: z.object({
-    reason: z.string().max(500, 'La razón no puede exceder 500 caracteres').optional()
-  })
+  reason: z.string().max(500, 'La razón no puede exceder 500 caracteres').optional()
 });
  
 export const checkAvailabilitySchema = z.object({
-  query: z.object({
-    parkingLotId: z.string().cuid(),
-    startTime: z.string().datetime(),
-    endTime: z.string().datetime()
-  })
+  parkingLotId: z.string().cuid(),
+  startTime:    z.string().datetime(),
+  endTime:      z.string().datetime()
 });
