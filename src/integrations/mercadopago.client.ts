@@ -179,41 +179,42 @@ auto_return: 'approved',
    * Esto SÍ crea una suscripción real para un usuario
    */
   async createSubscriptionPreApproval(data: {
-    reason: string;
-    autoRecurringAmount: number;
-    frequency: number;
-    frequencyType: 'days' | 'months';
-    payerEmail: string;
-  }) {
-    try {
-      const response = await this.preApprovalClient.create({
-        body: {
-          reason: data.reason,
-          payer_email: data.payerEmail,
-          back_url: `${config.frontend.url}/subscription/success`,
-          auto_recurring: {
-            frequency: data.frequency,
-            frequency_type: data.frequencyType,
-            transaction_amount: data.autoRecurringAmount,
-            currency_id: 'MXN',
-            start_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-          },
-          status: 'pending'
-        }
-      });
-
-      logger.info(`MercadoPago preapproval subscription created: ${response.id}`);
-
-      return {
-        id: response.id,
-        init_point: response.init_point,
-        status: response.status
-      };
-    } catch (error) {
-      logger.error('Error creating MercadoPago preapproval:', error);
-      throw error;
-    }
+  reason: string;
+  autoRecurringAmount: number;
+  frequency: number;
+  frequencyType: 'days' | 'months';
+  payerEmail: string;
+}) {
+  try {
+    const response = await this.preApprovalClient.create({
+      body: {
+        reason: data.reason,
+        payer_email: data.payerEmail,
+        // ✅ URL HTTPS válida — usa el mismo dominio del API
+        back_url: `${config.app.apiUrl}/subscriptions/success`,
+        auto_recurring: {
+          frequency: data.frequency,
+          frequency_type: data.frequencyType,
+          transaction_amount: data.autoRecurringAmount,
+          currency_id: 'MXN',
+          start_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+        },
+        status: 'pending'
+      }
+    });
+ 
+    logger.info(`MercadoPago preapproval subscription created: ${response.id}`);
+ 
+    return {
+      id: response.id,
+      init_point: response.init_point,
+      status: response.status
+    };
+  } catch (error) {
+    logger.error('Error creating MercadoPago preapproval:', error);
+    throw error;
   }
+}
 
   /**
    * Obtener suscripción
