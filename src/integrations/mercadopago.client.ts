@@ -50,10 +50,11 @@ async createPayment(data: {
         metadata: data.metadata ?? {},
         notification_url: `${config.app.apiUrl}/webhooks/mercadopago`,
         back_urls: {
-          success: `${config.frontend.url}/payment/success`,
-          failure: `${config.frontend.url}/payment/failure`,
-          pending: `${config.frontend.url}/payment/pending`
-        },
+  success: "parkingtop://payment/success",
+  failure: "parkingtop://payment/failure",
+  pending: "parkingtop://payment/pending"
+},
+auto_return: 'approved',
         statement_descriptor: 'PARKING TOP',
         expires: true,
         expiration_date_from: new Date().toISOString(),
