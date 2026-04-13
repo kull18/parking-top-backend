@@ -25,17 +25,20 @@ export const createParkingSchema = z.object({
   city: z.string().default('San Cristóbal de las Casas'),
   state: z.string().default('Chiapas'),
   postalCode: z.string().optional(),
-  latitude: z.number().min(-90).max(90),
-  longitude: z.number().min(-180).max(180),
-  totalSpots: z.number().int().positive(),
-  basePricePerHour: z.number().positive(),
-  overtimeRatePerHour: z.number().nonnegative(),
-  features: z.array(z.string()).default([]),
+  latitude: z.union([z.number(), z.string().transform(v => parseFloat(v))]).pipe(z.number().min(-90).max(90)),
+  longitude: z.union([z.number(), z.string().transform(v => parseFloat(v))]).pipe(z.number().min(-180).max(180)),
+  totalSpots: z.union([z.number(), z.string().transform(v => parseInt(v))]).pipe(z.number().int().positive()),
+  basePricePerHour: z.union([z.number(), z.string().transform(v => parseFloat(v))]).pipe(z.number().positive()),
+  overtimeRatePerHour: z.union([z.number(), z.string().transform(v => parseFloat(v))]).pipe(z.number().nonnegative()),
+  features: z.union([
+    z.array(z.string()),
+    z.string().transform(v => v.split(',').filter(Boolean))
+  ]).default([]),
   images: z.array(z.string().url()).default([]),
-  operatingHours: z.record(z.object({
-    open: z.string(),
-    close: z.string()
-  })).optional()
+  operatingHours: z.union([
+    z.record(z.object({ open: z.string(), close: z.string() })),
+    z.string().transform(v => JSON.parse(v))
+  ]).optional()
 });
 
 export const nearbyParkingSchema = z.object({
