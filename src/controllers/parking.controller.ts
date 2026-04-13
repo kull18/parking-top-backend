@@ -57,16 +57,21 @@ async create(req: AuthRequest, res: Response, next: NextFunction): Promise<void>
     const body = req.body;
     const files = req.files as Express.Multer.File[];
 
-    const parkingData = {
-      ...body,
-      latitude: parseFloat(body.latitude),
-      longitude: parseFloat(body.longitude),
-      totalSpots: parseInt(body.totalSpots),
-      basePricePerHour: parseFloat(body.basePricePerHour),
-      overtimeRatePerHour: parseFloat(body.overtimeRatePerHour),
-      operatingHours: body.operatingHours ? JSON.parse(body.operatingHours) : undefined,
-      features: body.features ? body.features.split(",") : []
-    };
+// parking.controller.ts - función create
+const parkingData = {
+  ...body,
+  latitude: parseFloat(body.latitude),
+  longitude: parseFloat(body.longitude),
+  totalSpots: parseInt(body.totalSpots),
+  basePricePerHour: parseFloat(body.basePricePerHour),
+  overtimeRatePerHour: parseFloat(body.overtimeRatePerHour),
+  operatingHours: typeof body.operatingHours === 'string' 
+    ? JSON.parse(body.operatingHours) 
+    : body.operatingHours,  // ← ya viene parseado por Zod
+  features: typeof body.features === 'string'
+    ? body.features.split(",")
+    : body.features  // ← ya viene como array por Zod
+};
 
     const imageUrls: string[] = [];
 
