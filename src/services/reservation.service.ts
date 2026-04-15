@@ -23,6 +23,11 @@ export class ReservationService {
     paymentMethod: string;
   }) {
     try {
+      const normalizedPaymentMethod =
+        data.paymentMethod === PaymentMethod.CASH || data.paymentMethod === 'cash'
+          ? PaymentMethod.CASH
+          : 'mercadopago';
+
       const parking = await parkingRepository.findById(data.parkingLotId);
       if (!parking) throw new Error('Estacionamiento no encontrado');
 
@@ -56,7 +61,8 @@ export class ReservationService {
         totalCost: baseCost,
         commissionRate,
         commissionAmount,
-        status: ReservationStatus.PENDING
+        status: ReservationStatus.PENDING,
+        paymentMethod: normalizedPaymentMethod
       });
 
       logger.info(`Reservation created: ${reservation.id} with payment method: ${data.paymentMethod}`);
@@ -72,6 +78,15 @@ export class ReservationService {
    */
   async processPayment(reservationId: string, paymentMethod: string = 'mercadopago') {
     try {
+      const normalizedPaymentMethod =
+        paymentMethod === PaymentMethod.CASH || paymentMethod === 'cash'
+          ? PaymentMethod.CASH
+          : 'mercadopago';
+
+      await reservationRepository.update(reservationId, {
+        paymentMethod: normalizedPaymentMethod
+      });
+
       const reservation = await reservationRepository.findById(reservationId);
       if (!reservation) throw new Error('Reserva no encontrada');
 
@@ -79,7 +94,7 @@ export class ReservationService {
       if (!user) throw new Error('Usuario no encontrado');
 
       // ✅ PAGO EN EFECTIVO
-      if (paymentMethod === PaymentMethod.CASH || paymentMethod === 'cash') {
+      if (normalizedPaymentMethod === PaymentMethod.CASH) {
         const payment = await paymentRepository.create({
           userId: reservation.userId,
           paymentType: PaymentType.RESERVATION,
