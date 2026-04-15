@@ -183,6 +183,28 @@ export class ReservationController {
   }
 
   /**
+   * Obtener todas las reservas del propietario (todos sus parkings)
+   */
+  async getOwnerReservations(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const ownerId = req.user!.userId;
+      const { status, startDate, endDate } = req.query;
+
+      const filters = {
+        ...(status && { status: (status as string).split(',') }),
+        ...(startDate && { startDate }),
+        ...(endDate && { endDate })
+      };
+
+      const reservations = await reservationService.getOwnerReservations(ownerId, filters);
+
+      sendSuccess(res, reservations);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * Obtener reserva por ID
    */
   async getById(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {

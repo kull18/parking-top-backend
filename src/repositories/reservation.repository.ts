@@ -195,6 +195,62 @@ export class ReservationRepository {
     });
   }
 
+  async findByOwnerId(ownerId: string, filters?: any) {
+    return await prisma.reservation.findMany({
+      where: {
+        parkingLot: { ownerId },
+        ...(filters?.status && { status: { in: filters.status } }),
+        ...(filters?.startDate && {
+          startTime: { gte: new Date(filters.startDate) }
+        }),
+        ...(filters?.endDate && {
+          endTime: { lte: new Date(filters.endDate) }
+        })
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            phone: true
+          }
+        },
+        parkingLot: {
+          select: {
+            id: true,
+            name: true,
+            address: true,
+            city: true,
+            state: true
+          }
+        },
+        parkingSpot: {
+          select: {
+            id: true,
+            spotNumber: true
+          }
+        },
+        vehicle: {
+          select: {
+            id: true,
+            brand: true,
+            model: true,
+            licensePlate: true
+          }
+        },
+        payments: {
+          select: {
+            id: true,
+            paymentMethod: true,
+            status: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+  }
+
   async update(id: string, data: any) {
     return await prisma.reservation.update({
       where: { id },
