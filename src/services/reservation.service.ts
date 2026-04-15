@@ -450,6 +450,13 @@ export class ReservationService {
   }
 
   /**
+   * Obtener todas las reservas de los estacionamientos del propietario
+   */
+  async getOwnerReservations(ownerId: string, filters?: any) {
+    return await reservationRepository.findByOwnerId(ownerId, filters);
+  }
+
+  /**
    * Obtener reserva por ID
    */
   async getById(reservationId: string) {

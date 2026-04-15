@@ -128,4 +128,14 @@ router.get(
   reservationController.getParkingReservations
 );
 
+/**
+ * Obtener todas las reservas del propietario (incluye parkingLot)
+ * GET /v1/reservations/owner?status=confirmed&startDate=xxx&endDate=xxx
+ */
+router.get(
+  '/owner',
+  authorize(UserRole.OWNER, UserRole.ADMIN),
+  reservationController.getOwnerReservations
+);
+
 export default router;
