@@ -58,12 +58,13 @@ router.get(
 );
 
 /**
- * Obtener reserva por ID
- * GET /v1/reservations/:id
+ * Obtener todas las reservas del propietario (incluye parkingLot)
+ * GET /v1/reservations/owner?status=confirmed&startDate=xxx&endDate=xxx
  */
 router.get(
-  '/:id',
-  reservationController.getById
+  '/owner',
+  authorize(UserRole.OWNER, UserRole.ADMIN),
+  reservationController.getOwnerReservations
 );
 
 /**
@@ -119,6 +120,15 @@ router.put(
 );
 
 /**
+ * Obtener reserva por ID
+ * GET /v1/reservations/:id
+ */
+router.get(
+  '/:id',
+  reservationController.getById
+);
+
+/**
  * Obtener reservas de un estacionamiento específico
  * GET /v1/reservations/parking/:parkingId?status=confirmed&startDate=xxx
  */
@@ -126,16 +136,6 @@ router.get(
   '/parking/:parkingId',
   authorize(UserRole.OWNER, UserRole.ADMIN),
   reservationController.getParkingReservations
-);
-
-/**
- * Obtener todas las reservas del propietario (incluye parkingLot)
- * GET /v1/reservations/owner?status=confirmed&startDate=xxx&endDate=xxx
- */
-router.get(
-  '/owner',
-  authorize(UserRole.OWNER, UserRole.ADMIN),
-  reservationController.getOwnerReservations
 );
 
 export default router;
