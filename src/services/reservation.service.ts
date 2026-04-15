@@ -178,7 +178,7 @@ export class ReservationService {
       // Actualizar pago a completado
       await paymentRepository.update(payment.id, {
         status: PaymentStatus.COMPLETED,
-        paidAt: new Date()
+        completedAt: new Date()
       });
 
       // Confirmar reserva
