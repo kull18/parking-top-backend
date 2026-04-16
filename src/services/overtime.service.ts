@@ -215,6 +215,19 @@ export class OvertimeService {
           }
         });
 
+        const existingReview = await prisma.review.findUnique({
+          where: { reservationId }
+        });
+
+        if (!existingReview) {
+          await notificationService.sendReservationCompletedReviewPrompt(
+            reservation.userId,
+            reservation.id,
+            reservation.parkingLotId,
+            reservation.parkingLot.name
+          );
+        }
+
         // Notificar al usuario
         await notificationService.create({
           userId: reservation.userId,
