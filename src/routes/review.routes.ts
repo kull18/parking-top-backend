@@ -22,7 +22,8 @@ router.get('/parking/:parkingId', reviewController.getParkingReviews);
  * GET /reviews/:id
  * Obtener una reseña específica
  */
-router.get('/:id', reviewController.getById);
+// NOTA: esta ruta debe declararse al final para no interceptar rutas
+// más específicas como /me/reviews.
 
 // ════════════════════════════════════════════════════════════════
 // RUTAS PROTEGIDAS (requieren autenticación)
@@ -78,5 +79,11 @@ router.post(
   validateRequest(respondReviewSchema),
   reviewController.respondToReview
 );
+
+/**
+ * GET /reviews/:id
+ * Obtener una reseña específica
+ */
+router.get('/:id', reviewController.getById);
 
 export default router;
