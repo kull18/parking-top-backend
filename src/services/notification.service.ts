@@ -291,6 +291,30 @@ export class NotificationService {
   }
 
   /**
+   * Enviar notificación para solicitar reseña al completar una reserva
+   */
+  async sendReservationCompletedReviewPrompt(
+    userId: string,
+    reservationId: string,
+    parkingLotId: string,
+    parkingName: string
+  ) {
+    await this.createAndSend({
+      userId,
+      type: NotificationType.RESERVATION_COMPLETED,
+      title: 'Reserva finalizada',
+      message: `Tu reserva en ${parkingName} terminó. Cuéntanos tu experiencia.`,
+      reservationId,
+      data: {
+        reservationId,
+        parkingLotId,
+        screen: 'review',
+        action: 'open_review'
+      }
+    });
+  }
+
+  /**
    * Enviar advertencia de overtime
    */
   async sendOvertimeWarning(userId: string, reservationId: string, minutesOver: number) {

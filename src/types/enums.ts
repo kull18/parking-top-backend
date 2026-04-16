@@ -67,6 +67,7 @@ export enum VehicleType {
 
 export enum NotificationType {
   RESERVATION_CONFIRMED = 'reservation_confirmed',
+  RESERVATION_COMPLETED = 'reservation_completed',
   RESERVATION_REMINDER = 'reservation_reminder',
   OVERTIME_WARNING = 'overtime_warning',
   OVERTIME_CHARGED = 'overtime_charged',

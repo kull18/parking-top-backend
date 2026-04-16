@@ -341,6 +341,19 @@ export class ReservationService {
       );
     }
 
+    const existingReview = await prisma.review.findUnique({
+      where: { reservationId }
+    });
+
+    if (!existingReview) {
+      await notificationService.sendReservationCompletedReviewPrompt(
+        reservation.userId,
+        reservationId,
+        reservation.parkingLotId,
+        reservation.parkingLot.name
+      );
+    }
+
     // ✅ Actualizar balance del propietario
     try {
       const parking = await parkingRepository.findById(reservation.parkingLotId);
