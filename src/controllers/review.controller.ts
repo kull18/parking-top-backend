@@ -14,7 +14,6 @@ export class ReviewController {
   async create(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user!.userId;
-      const userFullName = req.user!.fullName;
       const { parkingLotId, reservationId, rating, comment } = req.body;
 
       const review = await reviewService.createReview(
@@ -22,8 +21,7 @@ export class ReviewController {
         parkingLotId,
         reservationId,
         rating,
-        comment,
-        userFullName
+        comment
       );
 
       sendSuccess(res, review, 201);

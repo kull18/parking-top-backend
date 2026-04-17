@@ -17,8 +17,7 @@ export class ReviewService {
     parkingLotId: string,
     reservationId: string,
     rating: number,
-    comment?: string,
-    userFullName?: string
+    comment?: string
   ) {
     // Verificar que la reserva existe y pertenece al usuario
     const reservation = await reservationRepository.findById(reservationId);
@@ -63,7 +62,7 @@ export class ReviewService {
         userId: parking.owner.id,
         type: NotificationType.GENERAL,
         title: 'Nueva reseña recibida',
-        message: `${userFullName || 'Un cliente'} dejó una reseña de ${rating} estrellas en ${parking.name}`
+        message: `Un cliente dejó una reseña de ${rating} estrellas en ${parking.name}`
       });
 
       await firebaseService.sendToUser(parking.owner.id, {
